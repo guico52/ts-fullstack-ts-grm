@@ -10,7 +10,13 @@ import { gotoPage } from "./helpers"
  * layout with no sidebar), that the form explains nothing, and that a failure
  * puts the server's own message on screen.
  */
-const SESSION = { id: "85", name: "演示用户", email: "demo@example.com" }
+const SESSION = {
+  id: "85",
+  name: "演示用户",
+  email: "demo@example.com",
+  // 形状要与服务端一致：少了 token，刷新后 readSession 会直接丢弃整个会话。
+  token: "header.payload.signature",
+}
 
 async function mockApi(page: Page) {
   await page.route("**/auth/login**", async (route) => {

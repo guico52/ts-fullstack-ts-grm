@@ -54,6 +54,8 @@ PG_INTEGRATION=1 bun test tests/integration
 - `PG_HOST` / `PG_PORT` / `PG_DATABASE` / `PG_USER` / `PG_PASSWORD`：PostgreSQL 连接
 - `CORS_ORIGINS`：允许的前端来源，逗号分隔
 - `ENABLE_DOCS`：接口文档开关；不设置时非 production 默认开启
+- `JWT_SECRET`：JWT 签名密钥。**生产环境必须设置**（缺失时启动报错）；
+  开发环境可留空，会用内置默认值并打印警告。
 - `ADMIN_EMAIL` / `ADMIN_PWD`：初始管理员。**每次启动**检查有没有 name 为
   `admin` 的账号，没有就用这两个值创建；**已有则完全不动**，改过的密码不会
   被重启覆盖。任一项为空时跳过。改掉 admin 的名字会让它在下次启动重跑。
@@ -89,8 +91,10 @@ tests/                     单测；tests/integration/ 需真实库
 
 - `GET /health` —— 服务存活
 - `GET /health/db` —— 业务表可读性探针（不可用时 503）
-- `POST /auth/login` —— 邮箱 + 口令换用户信息（`{ id, name, email }`）。
-  **没有 token，也不拦其他接口**；未命中与口令不对回同样的 401。
+- `POST /auth/login` —— 邮箱 + 口令换 `{ id, name, email, token }`。token 是 JWT（7 天）。
+  未命中与口令不对回**逐字相同**的 401。
+  **校验中间件（`authGuard`）已就绪但没有挂在任何路由上**，因为前端还没带 token；
+  同样地，**没有授权** —— 角色与权限点有数据，但没人读它们。
 - `/rbac/organizations`、`/rbac/users`、`/rbac/views`、`/rbac/roles`、`/rbac/permissions`
 - `/book/books`、`/book/authors`、`/book/stores`
 

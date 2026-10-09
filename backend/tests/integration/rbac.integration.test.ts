@@ -10,6 +10,7 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { createApp } from "../../src/app.ts";
 import { close, pool } from "../../src/model/index.ts";
 import { ensureAdminUser } from "../../src/modules/rbac/user/bootstrap.ts";
+import { ROLE_ADMIN, ROLE_VIEWER, seedSystemData } from "../../src/modules/rbac/seed.ts";
 
 const enabled = process.env.PG_INTEGRATION === "1";
 // 加时间戳，避免多次运行时相互冲突。
@@ -540,7 +541,9 @@ describe.skipIf(!enabled)("auth（真实 pg）", () => {
     const session = await json<Record<string, unknown>>(response);
     expect(session).toMatchObject({ name: "IT-登录用户", email: EMAIL });
     // 字段集合本身就是要断言的东西：多一个 pwdHash 就是泄了口令。
-    expect(Object.keys(session).sort()).toEqual(["email", "id", "name"]);
+    expect(Object.keys(session).sort()).toEqual(["email", "id", "name", "token"]);
+    // token 是三段式 JWT，不是随便一个字符串。
+    expect(String(session.token).split(".")).toHaveLength(3);
   });
 
   it("login：口令不对与邮箱不存在是同一种失败", async () => {
@@ -618,6 +621,77 @@ describe.skipIf(!enabled)("bootstrap（真实 pg）", () => {
       [`${ADMIN}-2`],
     );
     expect(joined.rows).toHaveLength(1);
+  });
+});
+
+describe.skipIf(!enabled)("seed（真实 pg）", () => {
+  /**
+   * 这一组**不清理**。
+   *
+   * seed 建出来的视图、权限与角色就是系统要用的原始数据，不是测试垃圾；
+   * 它幂等，重跑只会补缺，不会改已有行。删掉它们反而会把开发库弄坏。
+   */
+
+  it("第二次调用不新建任何东西", async () => {
+    await seedSystemData();
+    const counts = () =>
+      pool.query(
+        `SELECT (SELECT count(*)::int FROM sys_view WHERE deleted_at IS NULL) views,
+                (SELECT count(*)::int FROM sys_permission WHERE deleted_at IS NULL) perms,
+                (SELECT count(*)::int FROM sys_role WHERE deleted_at IS NULL) roles`,
+      );
+
+    const before = (await counts()).rows[0];
+    await seedSystemData();
+    const after = (await counts()).rows[0];
+
+    expect(after).toEqual(before);
+  });
+
+  it("管理员拿到全部视图与全部权限", async () => {
+    await seedSystemData();
+
+    const { rows } = await pool.query(`
+      SELECT (SELECT count(*)::int FROM sys_view WHERE deleted_at IS NULL) views,
+             (SELECT count(*)::int FROM sys_permission WHERE deleted_at IS NULL) perms,
+             (SELECT count(*)::int FROM sys_role_view_mapping m
+                JOIN sys_role r ON r.id = m.role_id WHERE r.name = $1) admin_views,
+             (SELECT count(*)::int FROM sys_role_permission_mapping m
+                JOIN sys_role r ON r.id = m.role_id WHERE r.name = $1) admin_perms`,
+      [ROLE_ADMIN],
+    );
+
+    expect(rows[0].admin_views).toBe(rows[0].views);
+    expect(rows[0].admin_perms).toBe(rows[0].perms);
+  });
+
+  it("观察者只能读图书业务，碰不到系统管理的视图", async () => {
+    await seedSystemData();
+
+    const permissions = await pool.query(
+      `SELECT p.name FROM sys_role_permission_mapping m
+         JOIN sys_permission p ON p.id = m.permission_id
+         JOIN sys_role r ON r.id = m.role_id
+        WHERE r.name = $1 ORDER BY p.name`,
+      [ROLE_VIEWER],
+    );
+    // “不能删除和修改”就是这份清单的**形状**：只有 read。
+    expect(permissions.rows.map((row) => row.name)).toEqual(["book.author.read", "book.book.read", "book.store.read"]);
+
+    const views = await pool.query(
+      `SELECT v.name FROM sys_role_view_mapping m
+         JOIN sys_view v ON v.id = m.view_id
+         JOIN sys_role r ON r.id = m.role_id
+        WHERE r.name = $1`,
+      [ROLE_VIEWER],
+    );
+    // 期望值也 sort 一次：中文按 UTF-16 码点排，手写顺序容易想当然。
+    const names = views.rows.map((row) => row.name).sort();
+    expect(names).toEqual(["图书管理", "图书", "作者", "书店"].sort());
+
+    // “不可访问系统管理页面”同样是一个否定断言：一个都不能在。
+    const systemPages = ["系统管理", "用户管理", "视图管理", "角色管理", "权限管理"];
+    expect(names.filter((name) => systemPages.includes(name))).toEqual([]);
   });
 });
 

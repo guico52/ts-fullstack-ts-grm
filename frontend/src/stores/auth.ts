@@ -3,11 +3,12 @@ import { defineStore } from "pinia"
 
 import { readStorage, removeStorage, writeStorage } from "@/lib/storage"
 
-/** 登录后服务端回的那三个字段——口令哈希不在其中，也不该在。 */
+/** 登录后服务端回的四个字段。`token` 是 JWT；口令哈希不在其中，也不该在。 */
 export interface SessionUser {
   id: string
   name: string
   email: string
+  token: string
 }
 
 const SESSION_KEY = "vat-session"
@@ -16,10 +17,10 @@ const SESSION_KEY = "vat-session"
  * Who is signed in.
  *
  * **This is not a permission check.** The session lives in `localStorage`,
- * which anyone can edit, and there is no token — so all this state decides is
- * which shell to render. Nothing in the app may treat `signedIn` as proof of
- * anything; that has to wait for a real credential. See the auth module in the
- * backend for what is not implemented yet.
+ * which anyone can edit, and holding a token proves nothing until the backend
+ * actually verifies it — which it does not yet (the guard exists but is not
+ * mounted; see the backend auth module). Nothing in the app may treat
+ * `signedIn` as proof of anything.
  */
 function readSession(): SessionUser | null {
   const raw = readStorage(SESSION_KEY)
@@ -30,11 +31,16 @@ function readSession(): SessionUser | null {
     // Shape-check every field: a value in storage may have been written by an
     // older build, hand-edited, or truncated. A half-valid session is worse
     // than none, because the header would render it.
-    const { id, name, email } = parsed as Record<string, unknown>
-    if (typeof id !== "string" || typeof name !== "string" || typeof email !== "string") {
+    const { id, name, email, token } = parsed as Record<string, unknown>
+    if (
+      typeof id !== "string" ||
+      typeof name !== "string" ||
+      typeof email !== "string" ||
+      typeof token !== "string"
+    ) {
       return null
     }
-    return { id, name, email }
+    return { id, name, email, token }
   } catch {
     return null
   }
