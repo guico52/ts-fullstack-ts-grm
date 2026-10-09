@@ -49,7 +49,7 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
     );
     await pool.query("DELETE FROM sys_role WHERE name LIKE 'IT-%'");
     await pool.query("DELETE FROM sys_user WHERE email LIKE 'it-%@example.com'");
-    await pool.query("DELETE FROM sys_view WHERE path LIKE '/it-%'");
+    await pool.query("DELETE FROM sys_view WHERE name LIKE 'IT-%' OR path LIKE '/it-%'");
     await pool.query("DELETE FROM sys_permission WHERE name LIKE 'IT-%'");
     await pool.query("DELETE FROM sys_organization WHERE code LIKE 'IT-%' OR code LIKE 'ORG-%'");
     await close();
@@ -135,47 +135,171 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
     expect(await json<{ code: string }>(badRef)).toMatchObject({ code: "INVALID_REFERENCE" });
   });
 
-  it("view：父子结构，可按 parentId 过滤，显式 null 回到根", async () => {
-    const root = await json<{ id: string }>(
-      await send("/rbac/views", "POST", {
-        name: "IT-根菜单",
-        icon: "folder",
-        path: `/it-root-${STAMP}`,
-        componentPath: "layout/root",
-        type: "MENU",
-      }),
+  it("view：菜单 → 页面 → 按钮，层级由 parentId 表达", async () => {
+    const menu = await json<{ id: string; type: string; path: string | null }>(
+      await send("/rbac/views", "POST", { name: "IT-菜单", icon: "folder", type: "MENU" }),
     );
-    const child = await json<{ id: string; parentId: string | null; type: string }>(
+    // 菜单是分组节点：不承载组件，也没有路由。
+    expect(menu.path).toBeNull();
+
+    const page = await json<{
+      id: string;
+      parentId: string | null;
+      componentName: string | null;
+    }>(
       await send("/rbac/views", "POST", {
-        name: "IT-子页",
+        name: "IT-页面",
         icon: "file",
-        path: `/it-child-${STAMP}`,
-        componentPath: "views/child",
         type: "VIEW",
-        parentId: root.id,
-        sort: 5,
+        parentId: menu.id,
+        path: `/it-page-${STAMP}`,
+        componentPath: "views/system/ViewsView.vue",
+        componentName: "ViewsView",
       }),
     );
-    expect(child.parentId).toBe(root.id);
-    expect(child.type).toBe("VIEW");
+    expect(page.parentId).toBe(menu.id);
+    expect(page.componentName).toBe("ViewsView");
 
-    const children = await json<{ data: Array<{ id: string }> }>(await call(`/rbac/views?parentId=${root.id}`));
-    expect(children.data.map((row) => row.id)).toEqual([child.id]);
-
-    const moved = await json<{ parentId: string | null }>(
-      await send(`/rbac/views/${child.id}`, "PATCH", { parentId: null }),
+    const button = await json<{ id: string; parentId: string | null }>(
+      await send("/rbac/views", "POST", {
+        name: "IT-按钮",
+        icon: "zap",
+        type: "BUTTON",
+        parentId: page.id,
+      }),
     );
-    expect(moved.parentId).toBeNull();
+    expect(button.parentId).toBe(page.id);
 
-    // type 是枚举，非法值被框架拦下。
-    const badType = await send("/rbac/views", "POST", {
-      name: "IT-坏类型",
-      icon: "x",
-      path: `/it-bad-${STAMP}`,
-      componentPath: "x",
-      type: "NOPE",
-    });
+    // A 页面 may also stand on its own — it is an entry point, not only a
+    // child of a menu.
+    const topLevelPage = await json<{ id: string; parentId: string | null }>(
+      await send("/rbac/views", "POST", {
+        name: "IT-顶层页面",
+        icon: "file",
+        type: "VIEW",
+        path: `/it-top-${STAMP}`,
+        componentPath: "views/system/ViewsView.vue",
+        componentName: "ViewsView",
+      }),
+    );
+    expect(topLevelPage.parentId).toBeNull();
+
+    const children = await json<{ data: Array<{ id: string }> }>(
+      await call(`/rbac/views?parentId=${menu.id}`),
+    );
+    expect(children.data.map((row) => row.id)).toEqual([page.id]);
+  });
+
+  it("view：层级不合法一律 422", async () => {
+    const menu = await json<{ id: string }>(
+      await send("/rbac/views", "POST", { name: "IT-层级菜单", icon: "folder", type: "MENU" }),
+    );
+    const page = await json<{ id: string }>(
+      await send("/rbac/views", "POST", {
+        name: "IT-层级页面",
+        icon: "file",
+        type: "VIEW",
+        parentId: menu.id,
+      }),
+    );
+
+    const cases: Array<{ why: string; body: Record<string, unknown> }> = [
+      { why: "页面挂在页面下", body: { name: "x", icon: "i", type: "VIEW", parentId: page.id } },
+      { why: "按钮挂在菜单下（跨层）", body: { name: "x", icon: "i", type: "BUTTON", parentId: menu.id } },
+      { why: "菜单有上级", body: { name: "x", icon: "i", type: "MENU", parentId: menu.id } },
+      { why: "按钮没有上级", body: { name: "x", icon: "i", type: "BUTTON" } },
+    ];
+    for (const { why, body } of cases) {
+      const response = await send("/rbac/views", "POST", body);
+      expect(response.status, why).toBe(422);
+      expect(await json<{ code: string }>(response), why).toMatchObject({
+        code: "INVALID_HIERARCHY",
+      });
+    }
+
+    // 只改类型也会被拦：页面降级成按钮后，上级仍是菜单，组合不成立。
+    const demoted = await send(`/rbac/views/${page.id}`, "PATCH", { type: "BUTTON" });
+    expect(demoted.status).toBe(422);
+    expect(await json<{ code: string }>(demoted)).toMatchObject({ code: "INVALID_HIERARCHY" });
+
+    // 枚举本身的校验先于业务规则。
+    const badType = await send("/rbac/views", "POST", { name: "x", icon: "i", type: "NOPE" });
     expect(badType.status).toBe(422);
+    expect(await json<{ code: string }>(badType)).toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("view：排序按层级自动递增，显式值优先", async () => {
+    const menuA = await json<{ id: string; sort: number }>(
+      await send("/rbac/views", "POST", { name: "IT-排序A", icon: "i", type: "MENU" }),
+    );
+    const menuB = await json<{ id: string; sort: number }>(
+      await send("/rbac/views", "POST", { name: "IT-排序B", icon: "i", type: "MENU" }),
+    );
+    // 同一层：后者接着前者。用相对值断言，因为库里的顶层节点不止这两个。
+    expect(menuB.sort).toBe(menuA.sort + 1);
+
+    const page = (parentId: string, key: string) =>
+      send("/rbac/views", "POST", {
+        name: `IT-排序页${key}`,
+        icon: "i",
+        type: "VIEW",
+        parentId,
+        path: `/it-sort-${key}`,
+        componentPath: "views/system/ViewsView.vue",
+        componentName: "ViewsView",
+      });
+
+    const page1 = await json<{ sort: number }>(await page(menuA.id, "1"));
+    const page2 = await json<{ sort: number }>(await page(menuA.id, "2"));
+    // 新菜单下的第一个子节点从 1 开始，而不是接着顶层。
+    expect(page1.sort).toBe(1);
+    expect(page2.sort).toBe(2);
+
+    const other = await json<{ sort: number }>(await page(menuB.id, "3"));
+    expect(other.sort).toBe(1);
+
+    // 显式排序不被覆盖。
+    const explicit = await json<{ sort: number }>(
+      await send("/rbac/views", "POST", { name: "IT-排序显式", icon: "i", type: "MENU", sort: 99 }),
+    );
+    expect(explicit.sort).toBe(99);
+  });
+
+  it("view：从页面改成菜单会清空组件与路由", async () => {
+    const menu = await json<{ id: string }>(
+      await send("/rbac/views", "POST", { name: "IT-清空菜单", icon: "folder", type: "MENU" }),
+    );
+    const page = await json<{
+      id: string;
+      path: string | null;
+      componentPath: string | null;
+      componentName: string | null;
+    }>(
+      await send("/rbac/views", "POST", {
+        name: "IT-清空页面",
+        icon: "file",
+        type: "VIEW",
+        parentId: menu.id,
+        path: `/it-clear-${STAMP}`,
+        componentPath: "views/system/ViewsView.vue",
+        componentName: "ViewsView",
+      }),
+    );
+    expect(page.componentName).toBe("ViewsView");
+
+    // 表单在这些字段被隐藏时发的就是这个：连同上级一起清掉。
+    const cleared = await json<typeof page>(
+      await send(`/rbac/views/${page.id}`, "PATCH", {
+        type: "MENU",
+        parentId: null,
+        path: null,
+        componentPath: null,
+        componentName: null,
+      }),
+    );
+    expect(cleared.path).toBeNull();
+    expect(cleared.componentPath).toBeNull();
+    expect(cleared.componentName).toBeNull();
   });
 
   it("role：创建即绑定三类关联，PATCH 只替换传入的那一类", async () => {
@@ -188,12 +312,17 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
         organizationId: org.id,
       }),
     );
+    const viewMenu = await json<{ id: string }>(
+      await send("/rbac/views", "POST", { name: "IT-角色菜单", icon: "folder", type: "MENU" }),
+    );
     const view = await json<{ id: string }>(
       await send("/rbac/views", "POST", {
         name: "IT-角色视图",
         icon: "eye",
+        parentId: viewMenu.id,
         path: `/it-role-view-${STAMP}`,
         componentPath: "views/role",
+        componentName: "RoleView",
         type: "VIEW",
       }),
     );

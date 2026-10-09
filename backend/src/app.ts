@@ -6,6 +6,7 @@ import {
   DatabaseConflictError,
   DatabaseReferenceError,
   DatabaseUnavailableError,
+  InvalidHierarchyError,
   ResourceNotFoundError,
 } from "./errors.ts";
 import { organizationModule } from "./modules/rbac/organization/index.ts";
@@ -47,6 +48,11 @@ export function createApp() {
       if (code === "NOT_FOUND" || error instanceof ResourceNotFoundError) {
         set.status = 404;
         return { message: error instanceof Error ? error.message : "接口不存在", code: "NOT_FOUND" };
+      }
+      // A malformed tree is the caller's mistake, not a server fault.
+      if (error instanceof InvalidHierarchyError) {
+        set.status = 422;
+        return { message: error.message, code: "INVALID_HIERARCHY" };
       }
       // 凭据被拒是配置错误，重试不会成功，必须和"暂时连不上"区分开。
       if (error instanceof DatabaseAuthError) {

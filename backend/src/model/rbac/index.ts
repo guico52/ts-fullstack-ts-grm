@@ -35,8 +35,11 @@ export const SysView = model("SysView", "id", class {
   id = prop.i64().autoIncrement().asString();
   name = prop.text();
   icon = prop.text();
-  path = prop.text();
-  componentPath = prop.text();
+  // Route and component only apply to a VIEW: a MENU is a grouping node and a
+  // BUTTON is a permission point, and neither is rendered by a route.
+  path = prop.text().nullable();
+  componentPath = prop.text().nullable();
+  componentName = prop.text().nullable();
   sort = prop.i32();
   active = prop.bool().default(true);
   type = prop.enum(SysViewTypeEnum);

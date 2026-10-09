@@ -1,4 +1,5 @@
 import { dto, type SqlClient } from "@ts-grm/core";
+import type { PoolClient } from "pg";
 import { client, clientFor, run, transaction } from "../../../model";
 import { SysView } from "../../../model/rbac";
 import type { ViewModel } from "./model.ts";
@@ -13,6 +14,7 @@ export const ViewView = dto.view(SysView, (c) => [
   c.icon,
   c.path,
   c.componentPath,
+  c.componentName,
   c.sort,
   c.active,
   c.type,
@@ -32,7 +34,25 @@ async function findOne(sql: SqlClient, id: string) {
   return row ?? null;
 }
 
-const COLUMNS = "name, icon, path, component_path, sort, active, type, parent_id";
+const COLUMNS = "name, icon, path, component_path, component_name, sort, active, type, parent_id";
+
+/**
+ * Where a new row lands among its siblings: 1 for the first, then max + 1.
+ *
+ * Computed inside the same transaction as the insert, so two rows created at
+ * once for the same parent cannot both read the same maximum and collide.
+ * `IS NOT DISTINCT FROM` is what makes it work for top-level rows too, where
+ * the parent is NULL — `parent_id = NULL` would match nothing.
+ */
+async function nextSortNumber(session: PoolClient, parentId: string | null): Promise<number> {
+  const result = await session.query<{ next: string }>(
+    `SELECT COALESCE(MAX(sort), 0) + 1 AS next
+       FROM sys_view
+      WHERE deleted_at IS NULL AND parent_id IS NOT DISTINCT FROM $1`,
+    [parentId],
+  );
+  return Number(result.rows[0]?.next ?? 1);
+}
 
 export const viewRepository = {
   list(limit: number, offset: number, parentId?: string) {
@@ -56,17 +76,22 @@ export const viewRepository = {
 
   create(body: ViewModel["createBody"]) {
     return transaction(async (session) => {
+      // An explicit sort wins; otherwise the row goes to the end of its level.
+      const parentId = body.parentId ?? null;
+      const sort = body.sort ?? (await nextSortNumber(session, parentId));
+
       const inserted = await session.query(
-        `INSERT INTO sys_view (${COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        `INSERT INTO sys_view (${COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
         [
           body.name,
           body.icon,
-          body.path,
-          body.componentPath,
-          body.sort ?? 0,
+          body.path ?? null,
+          body.componentPath ?? null,
+          body.componentName ?? null,
+          sort,
           body.active ?? true,
           body.type,
-          body.parentId ?? null,
+          parentId,
         ],
       );
       const created = await findOne(clientFor(session), String(inserted.rows[0].id));
@@ -82,12 +107,13 @@ export const viewRepository = {
         `UPDATE sys_view
             SET name = COALESCE($2, name),
                 icon = COALESCE($3, icon),
-                path = COALESCE($4, path),
-                component_path = COALESCE($5, component_path),
-                sort = COALESCE($6, sort),
-                active = COALESCE($7, active),
-                type = COALESCE($8, type),
-                parent_id = CASE WHEN $9 THEN $10 ELSE parent_id END,
+                path = CASE WHEN $4 THEN $5 ELSE path END,
+                component_path = CASE WHEN $6 THEN $7 ELSE component_path END,
+                component_name = CASE WHEN $8 THEN $9 ELSE component_name END,
+                sort = COALESCE($10, sort),
+                active = COALESCE($11, active),
+                type = COALESCE($12, type),
+                parent_id = CASE WHEN $13 THEN $14 ELSE parent_id END,
                 updated_at = now()
           WHERE id = $1 AND deleted_at IS NULL
           RETURNING id`,
@@ -95,8 +121,12 @@ export const viewRepository = {
           id,
           body.name ?? null,
           body.icon ?? null,
+          body.path !== undefined,
           body.path ?? null,
+          body.componentPath !== undefined,
           body.componentPath ?? null,
+          body.componentName !== undefined,
+          body.componentName ?? null,
           body.sort ?? null,
           body.active ?? null,
           body.type ?? null,

@@ -1,6 +1,12 @@
 /** 领域层「资源不存在」。service 抛出，由 app.ts 映射为 404。 */
 export class ResourceNotFoundError extends Error {}
 
+/**
+ * 领域层「层级不合法」。视图是严格的三层：菜单 → 页面 → 按钮，
+ * 把页面挂在页面上（或让菜单有上级）都是配置错误，由 app.ts 映射为 422。
+ */
+export class InvalidHierarchyError extends Error {}
+
 export class DatabaseUnavailableError extends Error {}
 export class DatabaseAuthError extends Error {}
 export class DatabaseConflictError extends Error {}

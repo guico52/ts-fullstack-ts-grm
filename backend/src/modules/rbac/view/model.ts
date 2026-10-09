@@ -4,15 +4,16 @@ import { t, type UnwrapSchema } from "elysia";
 const id = t.String({ pattern: "^\\d+$" });
 const name = t.String({ minLength: 1, maxLength: 100, pattern: "\\S" });
 const icon = t.String({ maxLength: 100 });
-const path = t.String({ minLength: 1, maxLength: 255, pattern: "\\S" });
-const componentPath = t.String({ maxLength: 255 });
+const path = t.Union([t.String({ minLength: 1, maxLength: 255, pattern: "\\S" }), t.Null()]);
+const componentPath = t.Union([t.String({ maxLength: 255 }), t.Null()]);
+const componentName = t.Union([t.String({ minLength: 1, maxLength: 100, pattern: "\\S" }), t.Null()]);
 const sort = t.Integer({ minimum: 0, maximum: 100_000 });
 const active = t.Boolean();
 // 与模型里的 SysViewTypeEnum 保持一致。
 const type = t.Union([t.Literal("MENU"), t.Literal("VIEW"), t.Literal("BUTTON")]);
 const parentId = t.Union([id, t.Null()]);
 
-const entity = t.Object({ id, name, icon, path, componentPath, sort, active, type, parentId });
+const entity = t.Object({ id, name, icon, path, componentPath, componentName, sort, active, type, parentId });
 
 export const ViewModel = {
   idParam: t.Object({ id }),
@@ -26,8 +27,9 @@ export const ViewModel = {
     {
       name,
       icon,
-      path,
-      componentPath,
+      path: t.Optional(path),
+      componentPath: t.Optional(componentPath),
+      componentName: t.Optional(componentName),
       type,
       sort: t.Optional(sort),
       active: t.Optional(active),
@@ -41,6 +43,7 @@ export const ViewModel = {
       icon: t.Optional(icon),
       path: t.Optional(path),
       componentPath: t.Optional(componentPath),
+      componentName: t.Optional(componentName),
       type: t.Optional(type),
       sort: t.Optional(sort),
       active: t.Optional(active),

@@ -90,6 +90,20 @@ tests/                     单测；tests/integration/ 需真实库
 - **users**：`organizationId` 引用组织，响应里嵌套 `organization: { id, name }`；
   `password` 只存哈希（`Bun.password`），从不回显。
 - **views**：`parentId` 自引用，列表支持 `?parentId=` 过滤，`PATCH` 传 `parentId: null` 回到根。
+  层级是严格的三层，由 service 强制（违反返回 `422 INVALID_HIERARCHY`）：
+
+  | 类型 | 上级 |
+  | --- | --- |
+  | 菜单 | 不允许（必须是顶层） |
+  | 页面 | 可挂在菜单下，也可独立成顶层页面 |
+  | 按钮 | 必须挂在页面下 |
+
+  `componentName`（组件名）与 `path`（路由）由前端按 `componentPath` 推导：组件名取文件名的
+  大驼峰形式，路由取其小写加 `-` 的形式。
+  `path` / `componentPath` / `componentName` **可空**：菜单是分组节点、按钮是最小授权点，
+  两者都不由路由到达，不需要组件信息。
+  `sort` 在同级内**自动递增**：不传时取同级的 `MAX(sort) + 1`（第一个为 1），在插入的同一个
+  事务里计算；显式传值则以传入为准。层级按 `parent_id` 区分，顶层与各级各算各的。
 - **roles**：`userIds` / `viewIds` / `permissionIds` 三组关联，传了就**整体替换**、
   省略则保留原值。
 
