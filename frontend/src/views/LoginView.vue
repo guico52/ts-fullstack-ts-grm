@@ -10,16 +10,22 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input"
 import { api, describeApiError } from "@/lib/api.ts"
 import { isEmail } from "@/lib/validation.ts"
+import { registerAccessRoutes } from "@/router"
+import { useAccessStore } from "@/stores/access.ts"
 import { useAuthStore } from "@/stores/auth.ts"
 
 /**
  * 登录页。
  *
- * **没有路由守卫**：这一版登录只是把会话写进 store，未登录也能直接输地址
- * 进任何页面。守卫和真正的凭据都还没做，见 stores/auth.ts 的说明。
+ * 未登录时任何业务地址都会被守卫送回这里，所以它自己不需要守卫。
+ *
+ * 登录成功后不只写会话：还要**把可达集合取下来并登记成路由**。这是唯一一处
+ * “路由是登录之后才有的”这个事实真正落地的地方 —— 守卫的那条路只负责刷新
+ * 页面时的重建。
  */
 const router = useRouter()
 const auth = useAuthStore()
+const access = useAccessStore()
 
 const email = ref("")
 const password = ref("")
@@ -49,7 +55,12 @@ async function submit() {
     })
     if (failure) throw failure
     auth.signIn(data)
-    await router.push("/")
+
+    // 拿到“我能去哪”，把路由登记上，然后落到第一个可访问的页面。
+    // 不写死 `/`：用户不一定有总览的权限，跳过去就变成一次 404。
+    await access.load()
+    registerAccessRoutes(access.views)
+    await router.push(access.landingPath ?? "/")
   } catch (cause) {
     // 后端对"邮箱不存在"和"口令不对"回同一句话，所以这里直接显示它。
     error.value = describeApiError(cause)

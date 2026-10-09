@@ -1,5 +1,7 @@
 # Design principles
 
+示意代码中的 orders / members 是教学变量；当前业务使用 ResourceFormDialog、资源 spec 与 typed API adapter。
+
 Twenty-one rules. They are here because each one is a mistake that was made,
 seen in a screenshot, and then made impossible to repeat.
 

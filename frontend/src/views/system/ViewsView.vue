@@ -22,6 +22,11 @@ import { api, describeApiError } from "@/lib/api"
 import { VIEWS, type FieldOption, type ResourceRow } from "@/lib/rbac"
 import { nextSort, type ViewTreeRow } from "@/lib/view-tree"
 
+import { saveResource } from "@/lib/resource-api"
+import { useResourceActions } from "@/composables/useResourceActions"
+
+const actions = useResourceActions("views")
+
 const spec = VIEWS
 
 /**
@@ -108,13 +113,7 @@ function addChild(parent: ResourceRow) {
 }
 
 async function save(body: Record<string, unknown>, id: string | null) {
-  if (id === null) {
-    const { error } = await api.rbac.views.post(body as never)
-    if (error) throw error
-  } else {
-    const { error } = await api.rbac.views({ id }).patch(body as never)
-    if (error) throw error
-  }
+  await saveResource("views", body, id)
 }
 
 async function confirmDelete() {
@@ -139,7 +138,7 @@ async function confirmDelete() {
   <div class="p-4 space-y-4">
     <PageHeader :title="spec.title">
       <template #actions>
-        <Button @click="openCreate">
+        <Button v-if="actions.create" @click="openCreate">
           <Plus class="size-4" />
           新建{{ spec.singular }}
         </Button>
@@ -161,6 +160,7 @@ async function confirmDelete() {
 
       <CardContent class="px-0">
         <ViewTreeTable
+          :actions="actions"
           :columns="spec.columns"
           :rows="rows"
           :loading="loading"

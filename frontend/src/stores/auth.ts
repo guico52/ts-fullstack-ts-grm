@@ -18,8 +18,8 @@ const SESSION_KEY = "vat-session"
  *
  * **This is not a permission check.** The session lives in `localStorage`,
  * which anyone can edit, and holding a token proves nothing until the backend
- * actually verifies it — which it does not yet (the guard exists but is not
- * mounted; see the backend auth module). Nothing in the app may treat
+ * actually verifies it. The backend verifies JWT and checks current permissions
+ * for every business request. Nothing in the app may treat
  * `signedIn` as proof of anything.
  */
 function readSession(): SessionUser | null {
@@ -58,9 +58,8 @@ export const useAuthStore = defineStore("auth", () => {
   /**
    * Forget the session locally.
    *
-   * There is nothing to tell the server: no token was issued, so there is no
-   * session to end. When tokens arrive this is where the revocation call
-   * belongs.
+   * JWT is stateless: clearing local storage does not revoke an already copied
+   * token. It remains valid until expiry; permissions are checked on every request.
    */
   function signOut() {
     user.value = null

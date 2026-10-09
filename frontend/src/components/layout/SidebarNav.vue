@@ -2,8 +2,9 @@
 import { watch } from "vue"
 import { useRoute } from "vue-router"
 
-import { NAV_ENTRIES, isMenu } from "@/lib/nav"
+import { isMenu } from "@/lib/nav"
 import { brandConfig } from "@/config/brand"
+import { useAccessStore } from "@/stores/access"
 import { useUiStore } from "@/stores/ui"
 import SidebarMenuGroup from "./SidebarMenuGroup.vue"
 import SidebarNavItem from "./SidebarNavItem.vue"
@@ -20,6 +21,7 @@ defineEmits<{ navigate: [] }>()
 
 const route = useRoute()
 const ui = useUiStore()
+const access = useAccessStore()
 
 /**
  * Opening the Menu a route belongs to, on every navigation.
@@ -30,7 +32,7 @@ const ui = useUiStore()
  */
 watch(
   () => route.path,
-  (path) => ui.revealPath(path),
+  (path) => ui.revealPath(path, access.navEntries),
   { immediate: true },
 )
 </script>
@@ -60,7 +62,7 @@ watch(
     </div>
 
     <nav class="mt-2 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto" aria-label="主导航">
-      <template v-for="entry in NAV_ENTRIES" :key="isMenu(entry) ? entry.id : entry.to">
+      <template v-for="entry in access.navEntries" :key="isMenu(entry) ? entry.id : entry.to">
         <SidebarMenuGroup
           v-if="isMenu(entry)"
           :menu="entry"

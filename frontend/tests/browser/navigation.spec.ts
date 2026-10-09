@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test"
-import { gotoPage, waitForPageReady } from "./helpers"
+import { gotoPage, waitForPageReady, signIn } from "./helpers"
+
+// 路由是登录之后才登记的：这里的每个用例都得先有一个会话，否则 gotoPage 会被
+// 守卫送去 /login。（登录页自己的用例不在此列。）
+test.beforeEach(async ({ page }) => {
+  await signIn(page)
+})
 
 /**
  * Navigation: Menu vs View.

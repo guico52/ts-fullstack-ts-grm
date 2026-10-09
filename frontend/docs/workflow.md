@@ -61,12 +61,9 @@ rebuilding. If application code changes, run `bun run test:browser` again;
    </template>
    ```
 
-2. **Add the route** in `src/router/index.ts` (lazy import) with
-   `meta: { title: "Name" }`.
-3. **Add the nav entry** in `src/lib/nav.ts`, or the page exists but is
-   unreachable.
-4. **Run `bun run test`.** The guard requires `PageHeader` — if you wrote
-   your own heading, it fails now rather than in review.
+2. 在视图管理创建页面，选择组件和路由，再绑定到角色。导航及路由由可达集合自动派生。
+3. 新资源增加 schema 类型适配与权限映射，完整流程见[扩展指南](../../docs/extending.md)。
+4. 运行 bun run check；业务请求新增或修改时再运行数据库集成和真实全栈测试。
 
 **The `PageHeader` is the page's only `<h1>`.** No `<h1>` anywhere else in
 the view, ever. A guard checks this with the template AST.
@@ -117,7 +114,7 @@ Review [constraints.md](./constraints.md) for the complete project rules and
 which ones still depend on manual review.
 
 - [ ] `bun run check` green (typecheck, lint, unit tests, build, browser tests)
-- [ ] New page has a route **and** a nav entry
+- [ ] New page has a SysView grant, component and resource permissions
 - [ ] New pure logic has a test next to it
 - [ ] No hard-coded colours, no `!important`, no `outline: none`
 - [ ] Every new icon-only button has `aria-label` and `Tooltip`
@@ -140,7 +137,7 @@ relative to the tsconfig file. Do not add it back.
 `@` alias. Keep `paths` mirrored there, not only in `tsconfig.app.json`.
 
 **`vue-tsc -b` is incremental.** A stale `.tsbuildinfo` can hide an error
-that a clean run would show; `rm -rf node_modules/.tmp` if something looks
+that a clean run would show; `gio trash node_modules/.tmp` if something looks
 wrong.
 
 **Tailwind v4 has no `tailwind.config.js`.** Theme values live in
@@ -163,7 +160,7 @@ Safari, so a `h-screen` shell sits under the browser bar.
 shrink and the page scrolls as a whole instead of the main area.
 
 **`@internationalized/date`'s `parseDate` throws** on `2026-02-31` and on a
-non-leap `2026-02-29`. The `try/catch` in `isIsoDate` is load-bearing.
+non-leap `2026-02-29`. 需要日期校验时捕获异常；当前资源没有日期筛选功能。
 
 **Minified bundles are one line.** `grep -c` counts lines; use
 `grep -o … | wc -l` when inspecting `dist/`.
@@ -178,19 +175,7 @@ nothing. Type such fields as `string | number` and normalise before use.
 `update:open` before your `@click` handler runs, so any state the handler
 was going to read has already been cleared by your own close handler. If
 you need the target on click, use a plain `Button` and close the dialog
-yourself. See `OrdersView.vue`.
-
-**A canvas inherits nothing from the CSS.** ECharts draws to a canvas, so a
-`text-sm` class on a chart container changes nothing about the type inside
-it, and `var(--chart-1)` cannot be resolved at all. Both are handled once:
-sizes in `lib/chart-theme.ts`, colours in `components/charts/palette.ts`.
-An option written by hand elsewhere will silently render ECharts' 12px
-default and a hard-coded colour that ignores the theme.
-
-**ECharts is a big lazy chunk.** ~770kB minified on the chart route alone
-(`echarts` split into its own chunk in `vite.config.ts`). It never reaches
-the first load, and the size warning limit is raised rather than suppressed
-per build — do not add ECharts imports to anything the shell imports.
+yourself. See ResourceListView.vue.
 
 **A component whose root renders no element drops your `class`.**
 `DatePickerField` wraps `<Popover>`, which renders nothing, so

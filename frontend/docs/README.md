@@ -30,7 +30,7 @@ skipped.
 | Add a page                                     | [principles.md](./principles.md) → [workflow.md](./workflow.md#adding-a-page) |
 | Add a chart or a data visualisation            | [components.md](./components.md)                                              |
 | Add a map                                      | [architecture.md](./architecture.md)                                          |
-| Add a sidebar entry, or a collapsible group    | [navigation.md](./navigation.md#adding-an-entry)                              |
+| Add a sidebar entry, or a collapsible group    | [navigation.md](./navigation.md#添加页面)                                     |
 | Add a table                                    | [tables.md](./tables.md)                                                      |
 | Add or change a form                           | [forms.md](./forms.md)                                                        |
 | Add an accent or a theme value                 | [tokens.md](./tokens.md)                                                      |
@@ -50,3 +50,7 @@ through `PageHeader`. Data-card titles use one exact class list. Form fields
 use the `Field` family with a two-level spacing rhythm. Every table is
 paginated. Rules that matter are enforced by tests, not by convention — run
 `bun run check` before calling a change complete.
+
+## 全栈项目
+
+[架构](./architecture.md)、[导航](./navigation.md)、[API 类型边界](./api-client.md)描述当前实现。跨两端扩展、测试和部署见[项目文档](../../docs/README.md)。

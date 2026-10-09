@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test"
 
-import { gotoPage } from "./helpers"
+import { waitForPageReady, TEST_ACCESS } from "./helpers"
 
 /**
  * The login page.
@@ -14,11 +14,29 @@ const SESSION = {
   id: "85",
   name: "演示用户",
   email: "demo@example.com",
-  // 形状要与服务端一致：少了 token，刷新后 readSession 会直接丢弃整个会话。
   token: "header.payload.signature",
 }
 
+/** 登录后拉的可达集合。角色表单的测试靠它把路由登记出来。 */
+const ACCESS = {
+  views: [
+    {
+      id: "22",
+      name: "总览",
+      icon: "LayoutDashboard",
+      path: "/dashboard-view",
+      componentPath: "views/DashboardView.vue",
+      componentName: "DashboardView",
+      type: "VIEW",
+      parentId: null,
+      sort: 1,
+    },
+  ],
+  permissions: [],
+}
+
 async function mockApi(page: Page) {
+  await page.route("**/auth/me/access**", (route) => route.fulfill({ json: TEST_ACCESS }))
   await page.route("**/auth/login**", async (route) => {
     const body = route.request().postDataJSON() as { password?: string }
     if (body.password === "secret123") {
@@ -30,11 +48,20 @@ async function mockApi(page: Page) {
       json: { message: "邮箱或口令不正确", code: "INVALID_CREDENTIALS" },
     })
   })
+  // 登录成功后会拉可达集合，路由据此登记。不 mock 它就会拿假 token 打真后端，
+  // 拿到 401，登录页停在原地并显示一个与登录无关的错误。
+  await page.route("**/auth/me/access**", (route) => route.fulfill({ json: ACCESS }))
   // 登录成功后会落到总览页，那里并发取八个计数。给个空响应，
   // 测试就不必依赖一个跑着的后端。
   const empty = { data: [], total: 0, limit: 1, offset: 0 }
   await page.route("**/rbac/**", (route) => route.fulfill({ json: empty }))
   await page.route("**/book/**", (route) => route.fulfill({ json: empty }))
+}
+
+/** 登录页不能走 `gotoPage`：那个助手会断言“没有落在 /login”，而这里正是目的地。 */
+async function openLogin(page: Page) {
+  await page.goto("/login")
+  await waitForPageReady(page)
 }
 
 test.describe("login", () => {
@@ -43,7 +70,7 @@ test.describe("login", () => {
   })
 
   test("renders without the app shell", async ({ page }) => {
-    await gotoPage(page, "/login")
+    await openLogin(page)
 
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("登录")
     // 一个还没进来的人不该看见导航——那会让他以为已经进来了。
@@ -52,7 +79,7 @@ test.describe("login", () => {
   })
 
   test("the form says what it needs and nothing else", async ({ page }) => {
-    await gotoPage(page, "/login")
+    await openLogin(page)
 
     await expect(page.getByLabel("邮箱")).toBeVisible()
     await expect(page.getByLabel("口令")).toBeVisible()
@@ -62,7 +89,7 @@ test.describe("login", () => {
   })
 
   test("an empty submit reports both fields, not nothing", async ({ page }) => {
-    await gotoPage(page, "/login")
+    await openLogin(page)
 
     await page.getByRole("button", { name: "登录" }).click()
 
@@ -79,7 +106,7 @@ test.describe("login", () => {
       await route.fulfill({ json: SESSION })
     })
 
-    await gotoPage(page, "/login")
+    await openLogin(page)
     await page.getByLabel("邮箱").fill("not-an-email")
     await page.getByLabel("口令").fill("secret123")
     await page.getByRole("button", { name: "登录" }).click()
@@ -89,7 +116,7 @@ test.describe("login", () => {
   })
 
   test("rejected credentials show the server's message", async ({ page }) => {
-    await gotoPage(page, "/login")
+    await openLogin(page)
 
     await page.getByLabel("邮箱").fill("demo@example.com")
     await page.getByLabel("口令").fill("wrong-password")
@@ -101,22 +128,22 @@ test.describe("login", () => {
   })
 
   test("accepted credentials land on the overview and show who is signed in", async ({ page }) => {
-    await gotoPage(page, "/login")
+    await openLogin(page)
 
     await page.getByLabel("邮箱").fill("demo@example.com")
     await page.getByLabel("口令").fill("secret123")
     await page.getByRole("button", { name: "登录" }).click()
 
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/dashboard-view$/)
     await expect(page.locator("[data-slot=topbar]")).toContainText("演示用户")
   })
 
   test("the session survives a reload, and signing out ends it", async ({ page }) => {
-    await gotoPage(page, "/login")
+    await openLogin(page)
     await page.getByLabel("邮箱").fill("demo@example.com")
     await page.getByLabel("口令").fill("secret123")
     await page.getByRole("button", { name: "登录" }).click()
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/dashboard-view$/)
 
     await page.reload()
     await expect(page.locator("[data-slot=topbar]")).toContainText("演示用户")

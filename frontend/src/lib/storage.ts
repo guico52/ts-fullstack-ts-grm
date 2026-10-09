@@ -1,4 +1,12 @@
 /**
+ * 会话在 localStorage 里的键。
+ *
+ * 放在这一层而不是 `stores/auth.ts`：请求层（`lib/api.ts`）也要读它才能把
+ * token 放进请求头，而从 store 里导出一个常量会把 api 和 pinia 绑在一起。
+ */
+export const SESSION_KEY = "vat-session"
+
+/**
  * localStorage access that cannot take a feature down.
  *
  * Reads and writes are wrapped because storage throws in private mode and

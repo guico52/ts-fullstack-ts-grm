@@ -4,12 +4,12 @@
 
 ## 1. 技术栈和代码边界
 
-- 使用 Vue 3、TypeScript、Vite、Tailwind v4、Pinia、Vue Router、shadcn-vue / Reka UI；图表使用 ECharts / vue-echarts，测试使用 Vitest / Playwright。
+- 使用 Vue 3、TypeScript、Vite、Tailwind v4、Pinia、Vue Router、shadcn-vue / Reka UI；测试使用 Vitest / Playwright。
 - `views/` 组合页面；功能组件放在 `components/<feature>/`；状态和异步编排放在 `stores/`；过滤、排序、校验、格式化、分页等纯逻辑放在 `lib/`，测试与纯模块相邻。
 - `lib/` 不依赖 Vue、Pinia 或组件；可以依赖纯第三方库。不要在 `.vue` 中堆积带条件的循环或业务算法。
 - `components/data/` 只接收 props、发出事件，不导入 store 或 router。`PageHeader`、`SectionHeader` 同样保持展示职责；侧栏和主题开关可以使用状态。
 - 基础组件来自 shadcn-vue registry；缺少 primitive 时通过 CLI 添加，不自行重写。优先通过 props、class 和封装扩展；直接修改 `components/ui/` 属于维护本地 fork，重新生成前检查修改，避免覆盖。
-- 路由使用 lazy import，并设置 `meta.title`。新增可导航页面同时维护 `src/router/index.ts` 和 `src/lib/nav.ts`。
+- 路由使用 lazy import，并设置 `meta.title`。新增业务组件在 SysView 中登记并绑定角色；路由和导航由可达集合自动派生。
 - 组件使用 PascalCase，页面使用 `<Name>View.vue`，store 使用 `use<Name>Store`；纯模块优先 named exports，测试使用 `<unit>.test.ts`。
 - TypeScript 严格检查、`noUnusedLocals` 和 `erasableSyntaxOnly` 保持启用。不要重新引入 `baseUrl`；`@` alias 的 paths 在根配置和应用配置中保持一致。
 
@@ -61,7 +61,7 @@ text-base font-semibold tracking-[0.08em] text-muted-foreground uppercase
 
 - **Menu 只展开 / 折叠，View 只导航。** 点击 Menu 不改变 URL。
 - 新 Menu 默认展开；持久化关闭集合，访问关闭 Menu 下的页面时自动展开父级。
-- `src/lib/nav.ts` 是侧栏结构的唯一来源；桌面侧栏和移动 drawer 共用内容。移动 drawer 的打开状态不持久化。
+- GET /auth/me/access 是侧栏和业务路由的唯一数据源，access.ts 转为导航树；桌面侧栏和移动 drawer 共用内容。移动 drawer 的打开状态不持久化。
 - icon-only 按钮同时提供 `aria-label` 和 `Tooltip`；测试树需要 `TooltipProvider`。
 - 可交互且未 disabled 的控件必须显示 pointer cursor，并有可见 hover 反馈；pointer 在 `main.css` base layer 统一恢复，不逐个加 class。
 - Lucide 图标继承按钮的 `currentColor`，不要将可操作图标固定为 `text-muted-foreground`。删除动作的警示色放在 hover；disabled 与 placeholder 按各自状态处理。

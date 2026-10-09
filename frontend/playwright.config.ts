@@ -21,7 +21,7 @@ export default defineConfig({
   expect: { timeout: 5_000 },
   reporter: [["list"]],
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "4173"}`,
     trace: "retain-on-failure",
   },
   webServer: {
@@ -34,8 +34,8 @@ export default defineConfig({
     //
     // 直接调 `bunx playwright test` 需要 dist 已经存在；用
     // `bun run test:browser` 则不必关心。
-    command: "bun run preview",
-    url: "http://127.0.0.1:4173",
+    command: `bun run preview --port ${process.env.PLAYWRIGHT_PORT ?? "4173"} --strictPort`,
+    url: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "4173"}`,
     // 始终不用已存在的服务：从早先会话遗留的 preview 会拿旧构建去喂测试，
     // 每个用例都通过，但验的不是磁盘上的代码。
     reuseExistingServer: false,

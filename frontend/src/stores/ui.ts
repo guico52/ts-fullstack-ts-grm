@@ -1,7 +1,7 @@
 import { computed, ref } from "vue"
 import { defineStore } from "pinia"
 
-import { isMenu, menuContaining, NAV_ENTRIES } from "@/lib/nav"
+import { menuContaining, type NavEntry } from "@/lib/nav"
 import { readFlag, readStringArray, writeFlag, writeStringArray } from "@/lib/storage"
 
 const COLLAPSED_KEY = "vat-sidebar-collapsed"
@@ -43,9 +43,12 @@ export const useUiStore = defineStore("ui", () => {
    * Opens the Menu a route belongs to. Called on navigation: landing on
    * /orders with its parent collapsed leaves the user staring at a sidebar
    * that does not show where they are.
+   *
+   * `entries` 是**传进来的**：导航树现在由服务端按人给出，不再是模块里的一张
+   * 常量表。这个 store 只管“哪个菜单被收起”，不该自己去外面取数据。
    */
-  function revealPath(path: string) {
-    const menu = menuContaining(path)
+  function revealPath(path: string, entries: readonly NavEntry[]) {
+    const menu = menuContaining(path, entries)
     if (!menu || isMenuOpen(menu.id)) return
     closedMenus.value = closedMenus.value.filter((closed) => closed !== menu.id)
     writeStringArray(CLOSED_MENUS_KEY, closedMenus.value)
@@ -65,14 +68,10 @@ export const useUiStore = defineStore("ui", () => {
 
   const sidebarWidth = computed(() => (sidebarCollapsed.value ? "4rem" : "15rem"))
 
-  /** Entries with at least one Menu, for the guard that keeps the demo honest. */
-  const hasMenus = computed(() => NAV_ENTRIES.some(isMenu))
-
   return {
     sidebarCollapsed,
     mobileNavOpen,
     closedMenus,
-    hasMenus,
     sidebarWidth,
     isMenuOpen,
     toggleMenu,

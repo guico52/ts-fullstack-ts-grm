@@ -55,6 +55,7 @@ import {
 } from "@/lib/resource.ts"
 
 const props = defineProps<{
+  actions: { create: boolean; update: boolean; delete: boolean }
   spec: ResourceSpec
   list: (query: {
     limit: number
@@ -141,7 +142,7 @@ async function confirmDelete() {
   <div class="p-4 space-y-4">
     <PageHeader :title="spec.title">
       <template #actions>
-        <Button @click="openCreate">
+        <Button v-if="actions.create" @click="openCreate">
           <Plus class="size-4" />
           新建{{ spec.singular }}
         </Button>
@@ -171,7 +172,9 @@ async function confirmDelete() {
               >
                 {{ column.label }}
               </TableHead>
-              <TableHead class="w-20"><span class="sr-only">操作</span></TableHead>
+              <TableHead v-if="actions.update || actions.delete" class="w-20"
+                ><span class="sr-only">操作</span></TableHead
+              >
             </TableRow>
           </TableHeader>
 
@@ -184,9 +187,9 @@ async function confirmDelete() {
               >
                 {{ column.value(row) }}
               </TableCell>
-              <TableCell>
+              <TableCell v-if="actions.update || actions.delete">
                 <div class="flex items-center justify-end gap-1">
-                  <Tooltip>
+                  <Tooltip v-if="actions.update">
                     <TooltipTrigger as-child>
                       <Button
                         variant="ghost"
@@ -201,7 +204,7 @@ async function confirmDelete() {
                     <TooltipContent>编辑</TooltipContent>
                   </Tooltip>
 
-                  <Tooltip>
+                  <Tooltip v-if="actions.delete">
                     <TooltipTrigger as-child>
                       <Button
                         variant="ghost"
@@ -231,7 +234,7 @@ async function confirmDelete() {
             {{ loading ? "加载中…" : (loadError ?? `还没有${spec.singular}。`) }}
           </p>
           <div v-if="!loading" class="mt-4 flex justify-center">
-            <Button @click="openCreate">
+            <Button v-if="actions.create" @click="openCreate">
               <Plus class="size-4" />
               新建{{ spec.singular }}
             </Button>

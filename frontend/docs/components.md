@@ -255,7 +255,7 @@ move to a separate row. Browser tests verify long names in both themes.
 `tabular-nums` on the value.
 
 **A row of icon actions** — `Tooltip` + `aria-label` on each, never a bare
-icon button (principle 11). See `OrdersView.vue`.
+icon button (principle 11). See `ResourceListView.vue`.
 
 **A dialog with a form** — `Dialog` → `DialogHeader` → `form` →
 `FieldGroup` → `DialogFooter`. The footer lives inside the `<form>` so the

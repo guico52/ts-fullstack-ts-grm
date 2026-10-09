@@ -21,6 +21,14 @@ export interface ViewComponent {
   path: string
   /** Route derived from the name, e.g. `/organizations-view`. */
   route: string
+  /**
+   * Lazy loader for the component.
+   *
+   * Needed at **runtime**, not just at build time: the router registers a page
+   * only once the server says the signed-in user may reach it, so it has to look
+   * the loader up by name (see `router/index.ts`).
+   */
+  load: () => Promise<unknown>
 }
 
 /**
@@ -38,16 +46,24 @@ export function toKebabCase(value: string): string {
 }
 
 /** Derive a catalogue entry from a module path like `/src/views/Foo/Bar.vue`. */
-export function describeComponent(modulePath: string): ViewComponent {
+export function describeComponent(
+  modulePath: string,
+  load: () => Promise<unknown> = () => Promise.resolve(null),
+): ViewComponent {
   const path = modulePath.replace(/^\//, "").replace(/^src\//, "")
   const file = path.split("/").pop() ?? ""
   const name = file.replace(/\.vue$/, "")
-  return { name, path, route: `/${toKebabCase(name)}` }
+  return { name, path, route: `/${toKebabCase(name)}`, load }
 }
 
 export const VIEW_COMPONENTS: readonly ViewComponent[] = Object.keys(modules)
-  .map(describeComponent)
+  .map((modulePath) => describeComponent(modulePath, modules[modulePath]!))
   .sort((a, b) => a.path.localeCompare(b.path))
+
+/** 按组件名找加载器。服务器返回的 `componentName` 用它解析成真正的组件。 */
+export function findComponent(name: string): ViewComponent | undefined {
+  return VIEW_COMPONENTS.find((component) => component.name === name)
+}
 
 /**
  * Search the catalogue.

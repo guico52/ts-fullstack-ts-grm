@@ -15,16 +15,20 @@
 - 原本独立的 `bun.lock` 已移除，依赖由仓库根的 `bun.lock` 统一锁定
 - `README.md` 顶部补充本目录在 `ts-fullstack-ts-grm` 全栈模板中的角色说明
 
-## 尚未定制
+## 业务使用时需要定制
 
 以下步骤见 [`template-usage.md`](./template-usage.md)，按业务需要推进：
 
 - `src/config/brand.ts` 的公司全称、项目名、默认图片 URL 与字体
 - Logo 图片替换（彩色 Logo 需检查 `dark:invert`）
 - `tests/browser/navigation.spec.ts` 中与品牌文字、页面标题、默认图片相关的断言
-- 路由、导航与 demo 页面（`src/router`、`src/lib/nav.ts`、`src/views`）
+- 业务页面与角色绑定的视图、权限；路由和导航已经由服务端动态配置
 
 ## 后续同步
 
 独立导出的项目不会自动跟随模板更新。模板有新版本时，
 `git fetch` 上游后对比差异，选择明确的提交迁移，并在本文件追加迁移记录。
+
+## 全栈适配
+
+已接入真实 API、JWT、角色权限、动态路由、RBAC 与图书管理页面。Apache-2.0 授权已由仓库所有者确认，保留根 LICENSE / NOTICE。

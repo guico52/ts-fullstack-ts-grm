@@ -1,31 +1,20 @@
-import { markRaw, type Component } from "vue"
-import {
-  BookOpen,
-  Building2,
-  KeyRound,
-  LayoutDashboard,
-  LayoutList,
-  Library,
-  PenLine,
-  Shield,
-  ShieldCheck,
-  Store,
-  Users,
-} from "@lucide/vue"
+import type { Component } from "vue"
 
 /**
- * The navigation tree.
+ * The navigation tree, as types and rules.
  *
- * Two kinds of entry, and the distinction is the point:
+ * **There is no static entry table here any more.** The tree is built from what
+ * the server says the signed-in user may reach — see `lib/access.ts`. Keeping a
+ * second, hard-coded copy of the navigation was the one way the two could
+ * disagree, and the symptom is a menu item that leads to a 404.
+ *
+ * Two kinds of entry, and the distinction is behavioural:
  *
  * - **View** — a leaf that navigates when clicked.
  * - **Menu** — a parent that expands and collapses, and never navigates on
  *   its own. A parent that both opens and navigates is the classic way to
  *   make a sidebar feel unpredictable: the user cannot tell whether a click
  *   will move them or reveal something.
- *
- * One table feeds the sidebar, so a page's name can never disagree with the
- * link that opens it.
  */
 export interface NavView {
   kind: "view"
@@ -52,94 +41,6 @@ export function isMenu(entry: NavEntry): entry is NavMenu {
 }
 
 /**
- * markRaw: an icon is a component, not state. Wrapping it in a reactive
- * proxy would make Vue track it for no reason and warn in dev.
- */
-export const NAV_ENTRIES: NavEntry[] = [
-  {
-    kind: "view",
-    title: "总览",
-    to: "/",
-    icon: markRaw(LayoutDashboard),
-    description: "概览与指标",
-  },
-  {
-    kind: "menu",
-    id: "system",
-    title: "系统管理",
-    icon: markRaw(Shield),
-    description: "组织、用户、视图、角色与权限",
-    children: [
-      {
-        kind: "view",
-        title: "组织",
-        to: "/system/organizations",
-        icon: markRaw(Building2),
-        description: "组织单位",
-      },
-      {
-        kind: "view",
-        title: "用户",
-        to: "/system/users",
-        icon: markRaw(Users),
-        description: "用户与所属组织",
-      },
-      {
-        kind: "view",
-        title: "视图",
-        to: "/system/views",
-        icon: markRaw(LayoutList),
-        description: "菜单、页面与按钮",
-      },
-      {
-        kind: "view",
-        title: "角色",
-        to: "/system/roles",
-        icon: markRaw(ShieldCheck),
-        description: "用户、视图与权限的绑定",
-      },
-      {
-        kind: "view",
-        title: "权限",
-        to: "/system/permissions",
-        icon: markRaw(KeyRound),
-        description: "最小授权单元",
-      },
-    ],
-  },
-  {
-    kind: "menu",
-    id: "library",
-    title: "图书管理",
-    icon: markRaw(Library),
-    description: "图书、作者与书店",
-    children: [
-      {
-        kind: "view",
-        title: "图书",
-        to: "/library/books",
-        icon: markRaw(BookOpen),
-        description: "书目、版次与定价",
-      },
-      {
-        kind: "view",
-        title: "作者",
-        to: "/library/authors",
-        icon: markRaw(PenLine),
-        description: "与图书多对多",
-      },
-      {
-        kind: "view",
-        title: "书店",
-        to: "/library/stores",
-        icon: markRaw(Store),
-        description: "图书的归属方",
-      },
-    ],
-  },
-]
-
-/**
  * True when `to` is the current location, or an ancestor of it.
  *
  * "/" must match exactly; everything else matches by prefix so a child
@@ -150,10 +51,7 @@ export function isActivePath(to: string, path: string): boolean {
 }
 
 /** The Menu a path belongs to, if any. */
-export function menuContaining(
-  path: string,
-  entries: readonly NavEntry[] = NAV_ENTRIES,
-): NavMenu | undefined {
+export function menuContaining(path: string, entries: readonly NavEntry[]): NavMenu | undefined {
   return entries
     .filter(isMenu)
     .find((menu) => menu.children.some((child) => isActivePath(child.to, path)))

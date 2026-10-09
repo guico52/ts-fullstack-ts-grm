@@ -27,7 +27,7 @@ describe("toKebabCase", () => {
 
 describe("describeComponent", () => {
   it("derives name, path and route from a module path", () => {
-    expect(describeComponent("/src/views/OrganizationsView.vue")).toEqual({
+    expect(describeComponent("/src/views/OrganizationsView.vue")).toMatchObject({
       name: "OrganizationsView",
       path: "views/OrganizationsView.vue",
       route: "/organizations-view",
@@ -35,7 +35,7 @@ describe("describeComponent", () => {
   })
 
   it("keeps nested directories in the path", () => {
-    expect(describeComponent("/src/views/system/RoleView.vue")).toEqual({
+    expect(describeComponent("/src/views/system/RoleView.vue")).toMatchObject({
       name: "RoleView",
       path: "views/system/RoleView.vue",
       route: "/role-view",
@@ -44,10 +44,12 @@ describe("describeComponent", () => {
 })
 
 describe("matchComponents", () => {
+  // `load` 查询里用不到，但它是 ViewComponent 的一部分（路由按名字取组件用）。
+  const stub = () => Promise.resolve(null)
   const catalog: ViewComponent[] = [
-    { name: "UsersView", path: "views/UsersView.vue", route: "/users-view" },
-    { name: "RolesView", path: "views/RolesView.vue", route: "/roles-view" },
-    { name: "Detail", path: "views/users/Detail.vue", route: "/detail" },
+    { name: "UsersView", path: "views/UsersView.vue", route: "/users-view", load: stub },
+    { name: "RolesView", path: "views/RolesView.vue", route: "/roles-view", load: stub },
+    { name: "Detail", path: "views/users/Detail.vue", route: "/detail", load: stub },
   ]
 
   it("returns everything for an empty query", () => {

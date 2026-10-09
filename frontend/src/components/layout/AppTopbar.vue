@@ -7,20 +7,28 @@ import ThemeToggle from "@/components/layout/ThemeToggle.vue"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { brandConfig } from "@/config/brand"
+import { clearAccessRoutes } from "@/router"
+import { useAccessStore } from "@/stores/access"
 import { useAuthStore } from "@/stores/auth"
 import { useUiStore } from "@/stores/ui"
 
 const router = useRouter()
 const ui = useUiStore()
 const auth = useAuthStore()
+const access = useAccessStore()
 
 /**
- * 退出只是丢掉本地会话并回到登录页。
+ * 退出：丢掉会话、清掉可达集合、**撤掉动态路由**。
  *
- * 服务端没有会话可终结——登录没发任何凭据。等有了 token，撤销调用写在这里。
+ * 撤路由不能省。不撤的话，换一个权限更小的账号登进来，上一个人的页面还在路
+ * 由表里 —— 守卫会放行，因为已登录；页面渲染出来后再被后端一个个 403。
+ *
+ * token 是自证的，服务端没有会话可终结，所以这里不需要请求。
  */
 async function signOut() {
   auth.signOut()
+  access.reset()
+  clearAccessRoutes()
   await router.push("/login")
 }
 </script>
@@ -65,15 +73,23 @@ async function signOut() {
     <div class="topbar-end flex min-w-0 items-center justify-end gap-2">
       <AccentToggle />
       <ThemeToggle />
-      <!-- 没登录就不显示：没有守卫，直接输地址也能进任何页面，
-           那时顶栏不该装作有人登录着。 -->
+      <!-- 会话显示与退出入口；请求授权由后端独立校验。 -->
       <template v-if="auth.signedIn">
-        <span class="text-muted-foreground hidden max-w-32 truncate text-sm sm:inline">
+        <span class="text-muted-foreground hidden max-w-32 truncate text-sm lg:inline">
           {{ auth.user?.name }}
         </span>
         <Tooltip>
           <TooltipTrigger as-child>
-            <Button variant="ghost" size="icon-sm" aria-label="退出登录" @click="signOut">
+            <!-- `lg:` 起才出现。顶栏是三列网格，两侧各占 1fr —— 多一个控件就会把
+                 右侧列撑得比 1fr 宽，在 768–1023px 那段把品牌名挤掉。
+                 窄屏上退不了帐是可接受的代价；控件摆不下不是。 -->
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="hidden lg:inline-flex"
+              aria-label="退出登录"
+              @click="signOut"
+            >
               <LogOut class="size-4" />
             </Button>
           </TooltipTrigger>

@@ -1,156 +1,34 @@
-# Architecture
+# 前端架构
 
-## Layout
+## 目录与职责
 
-```
-src/
-├── assets/main.css        Tokens, both themes, base layer, glass utility
-├── config/brand.ts        Company title, default image URL, project name/font
-├── components/
-│   ├── ui/                shadcn-vue primitives — registry-managed, do not hand-edit*
-│   ├── layout/            App chrome: PageHeader, SectionHeader, sidebar, topbar
-│   ├── data/              Presentation primitives: StatCard, DataPagination
-│   ├── charts/            ECharts shells: LineChart, PieChart, BarChart, GeoChart
-│   └── orders/            The reference feature: filters, form dialog, date field
-├── lib/                   Pure logic + its tests. No Vue, no Pinia.
-├── stores/                Pinia stores (app state)
-├── router/index.ts        Route table; one lazy view per path
-├── views/                 One component per route
-├── App.vue                The shell: provider + sidebar + topbar + <RouterView>
-└── main.ts                createApp, pinia, router, theme boot
-```
+- `src/views/`：总览、登录、404、system/ 五个资源页面与 library/ 三个资源页面。
+- `src/components/ui/`：基础控件；`components/layout/`：外壳；`components/data/`：共享列表与分页；`components/rbac/`：表单与视图树。
+- `src/lib/`：资源元数据、请求适配、导航转换、校验和分页逻辑。
+- `src/composables/`：页面请求状态（useResource）和操作权限（useResourceActions）。
+- `src/stores/`：auth 会话、access 可达集合、theme 主题与 ui 外壳状态。
+- `src/router/`：固定登录及 404 路由、登录守卫和动态路由注册。
 
-\* Editing `components/ui/` is allowed, but it is a fork. Prefer passing a
-`class` or wrapping the component. Re-run the registry command only when you
-mean to take the upstream version.
+页面负责连接请求与展示组件。展示组件通过 props 接收数据、回调和权限，components/data/ 不导入 store 或 router。
+lib/ 不依赖 Pinia 实例；资源 spec 和导航条目可以引用 Vue 组件类型及 markRaw，不能笼统视为完全无 Vue 依赖。
 
----
+## 请求与类型
 
-## The dependency direction
+唯一客户端为 `src/lib/api.ts`，类型从 backend/src/app.ts 推导。
+通用表单产生 Record<string, unknown>，`src/lib/resource-api.ts` 检查字段的运行时类型并返回后端 schema 推导的 createBody / updateBody。
+适配器不使用 as never 或 as any；新增必填字段必须调整适配器，Treaty 调用继续检查接口类型。字符串长度、引用有效性和业务规则由后端最终校验。
 
-```
-views  ──▶  components/orders  ──▶  components/data  ──▶  components/ui
-  │                │                      │
-  └────────────────┴──────────────────────┘
-                   ▼
-                stores  ──▶  lib
-                              ▲
-                              └── (pure, imports nothing of ours)
-```
+## 会话、导航与授权
 
-Read it as: **arrows point down, and `lib` is at the bottom.**
+登录后将 JWT 会话保存在 localStorage，读取 GET /auth/me/access，再注册该用户的页面。
+刷新时重新加载可达集合；登出清除会话、权限与动态路由。UI 守卫不承担安全边界，后端逐次验证 token 与权限。
+JWT 无撤销接口；登出不会使复制出去的 token 失效。不要把本地 signedIn 作为授权依据。
 
-Rules that follow from it:
+auth 保存会话，theme 保存主题及强调色，ui 保存侧栏收起与关闭的菜单；access 不持久化，移动端抽屉不持久化。
+localStorage 异常由 storage.ts 捕获。当前请求 token 从 storage 读取，浏览器禁用 storage 时无法保持认证请求。
 
-- `lib/` imports no Vue, no Pinia, no component. It may import a pure
-  third-party library (`@internationalized/date` is fine; `vue` is not).
-- `components/data/` takes props and emits events. **No store, no router** —
-  a guard fails the check otherwise.
-- `stores/` may import `lib/`. Stores hold state and orchestrate; they do
-  not render.
-- `views/` composes the page — chrome, feature components, layout.
-  It is where the pieces meet, but not the only place that may hold state.
+## 扩展
 
-**Why the split matters for how you get edited.** The interesting mistakes
-live in the bottom two layers, and those are testable without a browser. The
-top layer is deliberately thin so there is less of it to get wrong.
-
----
-
-## Where does this code go?
-
-| The code…                                                   | Goes in                                | Example                                        |
-| ----------------------------------------------------------- | -------------------------------------- | ---------------------------------------------- |
-| Decides something (filter, sort, validate, format, clamp)   | `lib/<domain>.ts`                      | `filterOrders`, `pageWindow`, `validateMember` |
-| Holds state, coordinates mutations                          | `stores/<domain>.ts`                   | `useOrdersStore`                               |
-| Renders a reusable piece of UI with no knowledge of the app | `components/data/` or `components/ui/` | `StatCard`, `DataPagination`                   |
-| Renders a piece of one feature, and may own its state       | `components/<feature>/`                | `OrderFormDialog`                              |
-| Renders a route                                             | `views/<Name>View.vue`                 | `OrdersView.vue`                               |
-| Is a colour, size, radius or duration                       | `assets/main.css`                      | `--chart-3`                                    |
-
-**Smell test:** if you are writing a loop with a condition inside a `.vue`
-file, it belongs in `lib/`. If you are writing a `fetch` inside a component,
-it belongs in a store (and eventually a query layer).
-
----
-
-## State
-
-The stores are deliberately small:
-
-| Store                | Holds                                 | Persisted                                                              |
-| -------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
-| `theme`              | colour mode + accent                  | yes (`vat-theme`, `vat-accent`)                                        |
-| `ui`                 | sidebar collapsed, mobile drawer open | collapsed + closed Menus (`vat-sidebar-collapsed`, `vat-closed-menus`) |
-| `orders` / `members` | the demo data                         | no                                                                     |
-
-**Only persist what should survive a reload.** The mobile drawer is
-deliberately not persisted — restoring it would open an overlay over a page
-the user never asked to cover.
-
-**Read storage through `lib/storage.ts`.** It swallows the exception that
-private mode and blocked cookies throw; a preference that fails to save
-should still apply for the session, not crash a toggle.
-
----
-
-## SSR safety
-
-The guards server-render components with `@vue/server-renderer`, and
-`main.ts` runs the theme boot before mount. Both mean: **do not touch
-`window` or `document` at module scope or in a component's setup.**
-
-```ts
-// Yes
-globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false
-
-// No — throws during SSR and in the guard tests
-window.matchMedia("(prefers-color-scheme: dark)").matches
-```
-
-DOM work belongs in an effect or an event handler, where it only runs in a
-browser.
-
----
-
-## Naming
-
-| Kind           | Convention                         | Example                  |
-| -------------- | ---------------------------------- | ------------------------ |
-| Component file | `PascalCase.vue`                   | `PageHeader.vue`         |
-| View           | `<Name>View.vue`                   | `OrdersView.vue`         |
-| Store          | `use<Name>Store`                   | `useOrdersStore`         |
-| Pure module    | `camelCase.ts`, named exports      | `lib/pagination.ts`      |
-| Test           | `<unit>.test.ts`, next to the unit | `lib/orders.test.ts`     |
-| Type           | `PascalCase`                       | `OrderDraft`, `PageSize` |
-
-Prefer **named exports** in `lib/` — they keep imports honest and make the
-guard's source scanning unambiguous.
-
----
-
-## Router
-
-Routes are lazy (`() => import(...)`), so a view's dependencies stay out of
-the first load. `meta.title` names the route; the page still renders its
-own `PageHeader`, which remains the single source of the `<h1>`.
-
-Adding a route is two edits: `src/router/index.ts` and `src/lib/nav.ts`
-(the sidebar). The nav table is the sidebar's only source, so a page's name
-can never disagree with the link that opens it.
-
----
-
-## What is deliberately not here
-
-Data fetching, auth, i18n, a mock API, server-side sorting, and URL-backed
-filter state.
-
-Each is a decision that depends on your backend. A scaffold that guesses is
-harder to delete than to add. The RBAC pages are the seam: they call the
-backend directly through `src/lib/api.ts`, and the shape of a page does not
-change when the endpoints behind it do.
-
-When you add a data layer, keep the direction intact: a `lib/` module for
-the shaping logic, a store (or query layer) for the async part, and nothing
-but props in the components.
+新增组件自动进入 views-catalog，路由与导航来自角色绑定的 SysView 数据，无须手写静态业务路由。
+新增模块完整流程见[全栈扩展指南](../../docs/extending.md)。
+DOM 操作应在生命周期或事件中执行；基础组件会由 SSR 测试验证，不在模块顶层直接访问 window / document。

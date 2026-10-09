@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test"
-import { gotoPage } from "./helpers"
+import { gotoPage, signIn } from "./helpers"
 
 /**
  * The role form's two relational pickers.
@@ -94,6 +94,7 @@ const listRows = (page: Page) => rowsOf(page, "multi-select-option")
 
 test.describe("role form pickers", () => {
   test.beforeEach(async ({ page }) => {
+    await signIn(page)
     await mockApi(page)
   })
 

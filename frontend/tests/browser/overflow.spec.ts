@@ -1,5 +1,11 @@
 import { expect, test, type Page } from "@playwright/test"
-import { gotoPage } from "./helpers"
+import { gotoPage, signIn, waitForPageReady } from "./helpers"
+
+// 路由是登录之后才登记的：这里的每个用例都得先有一个会话，否则 gotoPage 会被
+// 守卫送去 /login。（登录页自己的用例不在此列。）
+test.beforeEach(async ({ page }) => {
+  await signIn(page)
+})
 
 /**
  * Overflow checks.
@@ -88,7 +94,8 @@ async function findOverflow(page: Page): Promise<string[]> {
   })
 }
 const PAGES = [
-  { path: "/login", name: "登录" },
+  // 登录页在 shell 之外，而且它自己就在 /login —— gotoPage 会断言“没落在登录页”。
+  { path: "/login", name: "登录", bare: true },
   { path: "/", name: "总览" },
   { path: "/system/organizations", name: "组织" },
   { path: "/system/users", name: "用户" },
@@ -107,12 +114,17 @@ const PAGES = [
  */
 const WIDTHS = [320, 360, 414, 768, 1024, 1280, 1440]
 
-for (const { path, name } of PAGES) {
+for (const { path, name, bare } of PAGES) {
   test.describe(`${name} (${path})`, () => {
     for (const width of WIDTHS) {
       test(`no horizontal overflow at ${width}px`, async ({ page }) => {
         await page.setViewportSize({ width, height: 900 })
-        await gotoPage(page, path)
+        if (bare) {
+          await page.goto(path)
+          await waitForPageReady(page)
+        } else {
+          await gotoPage(page, path)
+        }
 
         expect(await findOverflow(page), `overflow at ${width}px on ${path}`).toEqual([])
       })

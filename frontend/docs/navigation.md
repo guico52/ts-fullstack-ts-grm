@@ -18,49 +18,12 @@ negative case: clicking a Menu must leave the URL unchanged.
 
 ---
 
-## Adding an entry
+## 添加页面
 
-One table in `src/lib/nav.ts` feeds the sidebar, so a page's name can
-never disagree with the link that opens it.
-
-The same table is where a page becomes reachable; the topbar does not
-repeat the current page. It carries the company name instead, centred.
-
-**A page that navigates:**
-
-```ts
-{
-  kind: "view",
-  title: "Reports",
-  to: "/reports",
-  icon: markRaw(FileText),
-  description: "Exports and schedules",
-}
-```
-
-**A group of pages:**
-
-```ts
-{
-  kind: "menu",
-  id: "operations",              // stable key for the persisted state
-  title: "Operations",
-  icon: markRaw(Package),
-  description: "Records and people",
-  children: [
-    { kind: "view", title: "Orders", to: "/orders", icon: markRaw(ReceiptText), description: "…" },
-    { kind: "view", title: "Members", to: "/members", icon: markRaw(Users), description: "…" },
-  ],
-}
-```
-
-`markRaw` on every icon: an icon is a component, not state. Without it Vue
-wraps it in a reactive proxy it will never need.
-
-**Adding a route is still two edits**: `src/router/index.ts` and
-`src/lib/nav.ts`. A route with no nav entry exists but is unreachable.
-
----
+导航唯一数据源是 GET /auth/me/access。access.ts 将 SysView 的 MENU / VIEW 转成侧栏树，BUTTON 不进入侧栏。
+新建 views/ 下组件后，在视图管理创建页面并选择组件，设置 path，再给角色绑定视图及资源权限。
+views-catalog 自动发现组件，router 根据 componentName 注册对应路由；找不到组件不会注册。
+默认路径是总览 /、系统 /system/_、图书 /library/_。详见[扩展指南](../../docs/extending.md)。
 
 ## State
 

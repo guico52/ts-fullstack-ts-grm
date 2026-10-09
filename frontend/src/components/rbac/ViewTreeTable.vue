@@ -31,6 +31,7 @@ import { flattenVisible, parentIds, type ViewTreeRow } from "@/lib/view-tree"
  * to go to, so paging it would be a control that lies.
  */
 const props = defineProps<{
+  actions: { create: boolean; update: boolean; delete: boolean }
   columns: readonly ResourceColumn[]
   rows: readonly ResourceRow[]
   loading?: boolean
@@ -174,7 +175,7 @@ function toggle(id: string): void {
             <div class="flex items-center justify-end gap-1">
               <!-- Add is offered only where the tree has another level below;
                    a button is a leaf, so it gets no ⊕. -->
-              <Tooltip v-if="line.child">
+              <Tooltip v-if="line.child && actions.create">
                 <TooltipTrigger as-child>
                   <Button
                     variant="ghost"
@@ -189,7 +190,7 @@ function toggle(id: string): void {
                 <TooltipContent>添加{{ line.child.label }}</TooltipContent>
               </Tooltip>
 
-              <Tooltip>
+              <Tooltip v-if="actions.update">
                 <TooltipTrigger as-child>
                   <Button
                     variant="ghost"
@@ -204,7 +205,7 @@ function toggle(id: string): void {
                 <TooltipContent>编辑</TooltipContent>
               </Tooltip>
 
-              <Tooltip>
+              <Tooltip v-if="actions.delete">
                 <TooltipTrigger as-child>
                   <Button
                     variant="ghost"

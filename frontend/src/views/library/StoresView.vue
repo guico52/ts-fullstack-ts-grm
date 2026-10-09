@@ -12,6 +12,11 @@ import { api } from "@/lib/api.ts"
 import { STORES } from "@/lib/books.ts"
 import type { ResourceRow } from "@/lib/resource.ts"
 
+import { saveResource } from "@/lib/resource-api"
+import { useResourceActions } from "@/composables/useResourceActions"
+
+const actions = useResourceActions("stores")
+
 const spec = STORES
 
 const list = async ({ limit, offset }: { limit: number; offset: number }) => {
@@ -25,17 +30,9 @@ const remove = async (id: string) => {
   if (error) throw error
 }
 
-const save = async (body: Record<string, unknown>, id: string | null) => {
-  if (id === null) {
-    const { error } = await api.book.stores.post(body as never)
-    if (error) throw error
-    return
-  }
-  const { error } = await api.book.stores({ id }).patch(body as never)
-  if (error) throw error
-}
+const save = (body: Record<string, unknown>, id: string | null) => saveResource("stores", body, id)
 </script>
 
 <template>
-  <ResourceListView :spec="spec" :list="list" :remove="remove" :save="save" />
+  <ResourceListView :actions="actions" :spec="spec" :list="list" :remove="remove" :save="save" />
 </template>

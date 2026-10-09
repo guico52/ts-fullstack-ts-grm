@@ -1,4 +1,6 @@
-# Tables and filters
+# 表格
+
+当前业务列表使用 ResourceListView 和服务端 limit / offset 分页。下文的 orders、matched 等是本地过滤的示意变量，不代表仓库中的业务模块。
 
 Reference implementation: `src/views/system/OrganizationsView.vue` — CRUD plus
 pagination where the server owns the page.
@@ -196,10 +198,10 @@ Filtering, sorting, validation and paging are **pure functions in
 `src/lib/`**, tested without a DOM:
 
 ```
-src/lib/orders.ts        filterOrders · sortOrders · validateOrder · isIsoDate
-src/lib/orders.test.ts   27 tests
-src/lib/pagination.ts    paginate · clampPage · pageWindow
-src/lib/pagination.test.ts  23 tests
+src/lib/resource.ts         validateResource、toRequestBody
+src/lib/resource-api.ts     typed create / update adapters
+src/lib/pagination.ts       paginate、pageInfoOf、pageWindow
+src/composables/useResource.ts  服务端分页与请求状态
 ```
 
 The view holds state and renders. If you find yourself writing a loop with

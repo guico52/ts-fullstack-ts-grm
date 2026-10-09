@@ -130,7 +130,7 @@ therefore carry a legend or a table view — **colour is never the only
 channel carrying information.**
 
 Charts are ECharts, which paints into a canvas and cannot resolve `var()`.
-`components/charts/palette.ts` reads these slots off the live document and
+图表应从 document 的 computed style 读取这些 token（当前没有图表页面），并
 hands the values to the option builders, so changing a slot here still moves
 every chart. Multi-series charts take slots in order; where two slots would
 sit too close together in one theme (the dark slots 1 and 2), name the slot

@@ -1,5 +1,7 @@
 # Forms
 
+示意代码中的 orders / members 是教学变量；当前业务使用 ResourceFormDialog、资源 spec 与 typed API adapter。
+
 The `Field` family is what makes a form read as designed rather than
 assembled. Use it. Do not build a form out of `Label` + `Input` + a `<div>`
 with your own margins.

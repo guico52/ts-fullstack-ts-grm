@@ -94,9 +94,7 @@ That is what makes the rule a mechanism instead of a comment: setting
 `--text-xs` back to 12px fails the check, so the floor lives in one place
 and the guard watches that place.
 
-The same floor applies inside a canvas. ECharts inherits nothing from the CSS
-type scale — its own default is 12px — so `lib/chart-theme.test.ts` walks every
-chart option and asserts that no `fontSize` in it is below 14px.
+未来增加 canvas 图表时，需单独检查绘制字体；当前没有图表页面或 chart-theme 守卫。
 
 ---
 
@@ -152,12 +150,12 @@ expect(html).toMatch(/<h2[^>]*>[\s\S]*?Overview[\s\S]*?<\/h2>/)
 not `toContain("<h2>Overview</h2>")`.
 
 **A component that injects a context needs its provider in the test tree.**
-Mounting `OrdersView` alone fails with
+Mounting `OrganizationsView` alone fails with
 `Injection Symbol(TooltipProviderContext) not found`, because the row actions
 are wrapped in `Tooltip`. Wrap it:
 
 ```ts
-mount({ render: () => h(TooltipProvider, null, { default: () => h(OrdersView) }) })
+mount({ render: () => h(TooltipProvider, null, { default: () => h(OrganizationsView) }) })
 ```
 
 **Dialogs teleport.** Assert their content on `document.body`, where it
@@ -209,7 +207,7 @@ whose right edge crosses the viewport:
   measured, so a scroll container that escapes the viewport is caught.
 - 1px helpers (`sr-only`) and hidden elements are skipped.
 
-End-to-end flows live here too (`tests/browser/orders.spec.ts`): create,
+End-to-end flows live here too (`tests/browser/resource-list.spec.ts`): create,
 edit and delete through the real UI. They exist because a component test can
 prove a dialog opens and a validator returns an error map, and still miss a
 submit handler that throws before it adds anything.

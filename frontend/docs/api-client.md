@@ -86,13 +86,13 @@ if (error) {
 #    想手动验证，就在前端写一句访问错误字段的代码，vue-tsc 应报错。
 bun run --filter @ts-fullstack-ts-grm/frontend typecheck
 
-# 2. 运行时：起后端，用前端客户端真实调用一遍。
-bun run dev:backend
-cd frontend && VITE_API_URL=http://localhost:3000 bun -e '
-  const { api } = await import("./src/lib/api.ts")
-  console.log(await api.health.get())
-'
+# 2. 运行时：完整验证前端自己的客户端与真实后端。
+#    使用独立测试库，先按根 docs/testing.md 配置并迁移。
+bun run test:e2e
 ```
 
-第 2 步用的是前端自己的客户端（不是另写一段 fetch），所以它验证的是**这条链路**，
-而不只是后端能响应。
+第 2 步通过真实浏览器登录，前端客户端自动携带 token，后端验证权限，覆盖完整链路。
+
+## 通用资源表单的类型边界
+
+resource-api.ts 对 unknown 字段做运行时形状校验，返回后端 schema 推导的请求类型。禁止 as never / as any 绕过请求契约。服务端继续验证长度、枚举和引用规则。

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { gotoPage } from "./helpers"
+import { gotoPage, signIn } from "./helpers"
 
 /**
  * The view tree table.
@@ -46,6 +46,7 @@ const ROWS = [
 
 test.describe("view tree", () => {
   test.beforeEach(async ({ page }) => {
+    await signIn(page)
     await page.route("**/rbac/views**", (route) =>
       route.fulfill({
         json: { data: ROWS, total: ROWS.length, limit: 100, offset: 0 },

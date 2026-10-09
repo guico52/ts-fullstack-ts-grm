@@ -6,7 +6,7 @@ detail is in [`docs/`](./docs/README.md).
 ## What this is
 
 A Vue 3 admin scaffold: TypeScript, Vite, Tailwind v4, Pinia, Vue Router,
-shadcn-vue (Reka UI), ECharts (vue-echarts), Vitest. It exists to keep an
+shadcn-vue (Reka UI), Vitest. It exists to keep an
 admin app consistent — the components were never the problem, the drift was.
 
 ## Commands
@@ -111,11 +111,9 @@ Full text with reasoning and examples: [`docs/principles.md`](./docs/principles.
    `src/views/library/BooksView.vue`. Anything else starts from the skeleton
    in [`docs/workflow.md`](./docs/workflow.md#adding-a-page): `PageHeader`
    first, `p-4 space-y-4` container.
-2. Route in `src/router/index.ts`, lazy, with `meta.title`.
-3. Nav entry in `src/lib/nav.ts` — a **View** if the page navigates, a
-   **Menu** if it groups pages. See
-   [`docs/navigation.md`](./docs/navigation.md).
-4. `bun run test` — the guards tell you what you missed.
+2. Create a SysView with componentName and path; grant it to the role. Routes and sidebar are derived from GET /auth/me/access.
+3. Add typed API adapters and resource permissions for new resources; see [full-stack guide](../docs/extending.md).
+4. Run bun run check. For server changes, also run isolated database integration and full-stack browser tests.
 
 ## Known traps
 
