@@ -1,13 +1,28 @@
 <script setup lang="ts">
-import { Menu } from "@lucide/vue"
+import { useRouter } from "vue-router"
+import { LogOut, Menu } from "@lucide/vue"
 
 import AccentToggle from "@/components/layout/AccentToggle.vue"
 import ThemeToggle from "@/components/layout/ThemeToggle.vue"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { brandConfig } from "@/config/brand"
+import { useAuthStore } from "@/stores/auth"
 import { useUiStore } from "@/stores/ui"
 
+const router = useRouter()
 const ui = useUiStore()
+const auth = useAuthStore()
+
+/**
+ * 退出只是丢掉本地会话并回到登录页。
+ *
+ * 服务端没有会话可终结——登录没发任何凭据。等有了 token，撤销调用写在这里。
+ */
+async function signOut() {
+  auth.signOut()
+  await router.push("/login")
+}
 </script>
 
 <template>
@@ -50,6 +65,21 @@ const ui = useUiStore()
     <div class="topbar-end flex min-w-0 items-center justify-end gap-2">
       <AccentToggle />
       <ThemeToggle />
+      <!-- 没登录就不显示：没有守卫，直接输地址也能进任何页面，
+           那时顶栏不该装作有人登录着。 -->
+      <template v-if="auth.signedIn">
+        <span class="text-muted-foreground hidden max-w-32 truncate text-sm sm:inline">
+          {{ auth.user?.name }}
+        </span>
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <Button variant="ghost" size="icon-sm" aria-label="退出登录" @click="signOut">
+              <LogOut class="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>退出登录</TooltipContent>
+        </Tooltip>
+      </template>
     </div>
   </header>
 </template>

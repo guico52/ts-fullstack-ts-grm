@@ -1,5 +1,19 @@
 import { createRouter, createWebHistory } from "vue-router"
 
+declare module "vue-router" {
+  interface RouteMeta {
+    /** 文档标题与面包屑用的名字。 */
+    title: string
+    /**
+     * `"bare"` = 不套侧栏与顶栏的 shell。目前只有登录页用它。
+     *
+     * 用一个字段而不是在 App.vue 里判断路径：下一个需要裸布局的页面
+     * （错误页、打印页）只改自己的路由一行。
+     */
+    layout?: "bare"
+  }
+}
+
 /**
  * Routes are lazy so a view's dependencies (tables, dialogs, editors) stay
  * out of the first load. `meta.title` names the route; the page itself still
@@ -9,6 +23,12 @@ import { createRouter, createWebHistory } from "vue-router"
  * that table, and a route missing from it is a page nobody can reach.
  */
 export const routes = [
+  {
+    path: "/login",
+    name: "login",
+    component: () => import("@/views/LoginView.vue"),
+    meta: { title: "登录", layout: "bare" },
+  },
   {
     path: "/",
     name: "dashboard",

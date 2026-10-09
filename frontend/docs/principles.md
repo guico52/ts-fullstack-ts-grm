@@ -408,6 +408,12 @@ column declares `step: 0.01`, and `src/lib/books.test.ts` pins it.
 The general form: when a control can reject input without telling anyone, the
 rejection has to be either impossible or visible.
 
+**Which is why every form carries `novalidate`.** `<input type="email">` and a
+`type="number"` whose `step` the value cannot reach are the same trap with
+different triggers — the browser refuses to submit and says nothing. Turning
+validation off lets our own check run: `validateResource` for a resource form,
+a `computed` for the login page. Both put the reason on screen.
+
 ---
 
 ## 20. The control follows the shape of the data

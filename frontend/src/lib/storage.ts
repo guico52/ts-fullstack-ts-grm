@@ -22,6 +22,15 @@ export function writeStorage(key: string, value: string) {
   }
 }
 
+/** 登出用。与写入同理：清不掉也不该把页面弄崩。 */
+export function removeStorage(key: string) {
+  try {
+    globalThis.localStorage?.removeItem(key)
+  } catch {
+    // Nothing to do — the in-memory state is already cleared.
+  }
+}
+
 export function readFlag(key: string, fallback = false): boolean {
   const raw = readStorage(key)
   if (raw === null) return fallback

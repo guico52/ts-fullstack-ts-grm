@@ -131,6 +131,12 @@ Three that cost real debugging time:
 - **`AlertDialogAction` closes the dialog before your `@click` runs**, so
   state your handler reads may already be cleared. Use a plain `Button` and
   close the dialog yourself.
+- **Every `<form>` needs `novalidate`.** The browser's own validation
+  (`type="email"`, `type="number"` with an unreachable `step`) blocks the
+  submit **without firing `submit`**, so your handler never runs and the
+  button looks dead. Nothing surfaces it: no request, no message, no console
+  output. Our own checks (`validateResource`, or the page's `computed`) say
+  what is wrong; the browser's do not.
 - **A `<input type="number">` rejects any value its `step` cannot reach, and
   a form that fails HTML5 validation never fires `submit`.** A `numeric`
   column holding decimals needs `step: 0.01` in its spec, or the only symptom

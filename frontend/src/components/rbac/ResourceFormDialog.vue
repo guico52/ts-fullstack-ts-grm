@@ -230,9 +230,14 @@ async function submit(): Promise<void> {
 <template>
   <Dialog :open="open" @update:open="(value: boolean) => emit('update:open', value)">
     <DialogContent :size="dialogSize" draggable>
-      <!-- The footer lives inside the form so Enter submits and the confirm
-           button can be type="submit", per the form conventions. -->
-      <form class="space-y-5" @submit.prevent="submit">
+      <!-- `novalidate` 不是可选项。浏览器自己的校验（`type="email"` 的格式、
+           `type="number"` 的 step）在失败时**不派发 submit**，于是这里的校验
+           与错误提示永远不会跑——症状就是一颗点了没反应的保存按钮。
+           真正拦住非法值的是 `validateResource`，它会把话说出来。
+           见 principles 第 19 条。
+
+           footer 在这个 form 里面，所以主按钮是真的 `type="submit"`，回车能用。 -->
+      <form class="space-y-5" novalidate @submit.prevent="submit">
         <DialogHeader>
           <DialogTitle>
             {{ mode === "create" ? `新建${spec.singular}` : `编辑${spec.singular}` }}

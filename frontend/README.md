@@ -75,6 +75,8 @@ lives in [`docs/`](./docs/README.md).
 | `src/components/rbac/ResourceFormDialog.vue` | One dialog for create and edit across all five resources, with validation and `aria-invalid`.                    |
 | `src/lib/rbac.ts`                            | RBAC resource metadata, as plain data — the layer that has edge cases and needs no rendering.                    |
 | `src/lib/resource.ts`                        | The vocabulary those specs are written in: `ResourceSpec`, the row readers, the validators.                      |
+| `src/views/LoginView.vue`                    | The one page outside the shell — `meta.layout: "bare"`, see `src/router/index.ts`.                               |
+| `src/stores/auth.ts`                         | Who is signed in. A `localStorage` value, so it decides which shell renders — and nothing else.                  |
 | `src/lib/design-system.test.ts`              | How the visual rules are kept from decaying.                                                                     |
 | `tests/browser/overflow.spec.ts`             | The overflow check: every page at every breakpoint, in a real browser.                                           |
 

@@ -88,6 +88,7 @@ async function findOverflow(page: Page): Promise<string[]> {
   })
 }
 const PAGES = [
+  { path: "/login", name: "登录" },
   { path: "/", name: "总览" },
   { path: "/system/organizations", name: "组织" },
   { path: "/system/users", name: "用户" },
