@@ -274,7 +274,11 @@ async function confirmDelete() {
           <AlertDialogTitle>
             删除「{{ pendingDelete ? spec.label(pendingDelete) : "" }}」？
           </AlertDialogTitle>
-          <AlertDialogDescription>删除后无法从界面恢复。</AlertDialogDescription>
+          <!-- 空描述，与 ResourceFormDialog 同一处理。这里的描述曾经写
+               "删除后无法从界面恢复" —— 两重错：它是描述（见 principles
+               第 21 条），而且描述错了（写入是软删除，数据还在库里，只是
+               界面上没有恢复入口）。标题已经说了删的是哪一个。 -->
+          <AlertDialogDescription class="sr-only" />
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>取消</AlertDialogCancel>

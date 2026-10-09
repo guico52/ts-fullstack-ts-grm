@@ -472,6 +472,18 @@ and it does not belong there.
 **Enforced by review, and by absence.** `ResourceField.hint` no longer
 exists, so the scaffold cannot grow one back out of habit.
 
+**A confirmation asks _which_, not _what happens_.** `删除「三体」？` names the
+row; the red button names the action. A sentence underneath can only go wrong,
+and this one did — twice: `该图书会被软删除，之后不再出现在列表与查询中` was the
+implementation talking, and its replacement, `删除后无法从界面恢复。`, reads as
+"the data is gone" when the write is a soft delete and the row is still in the
+database. Anyone who read that sentence and then had to ask whether the delete
+even happened was reading it correctly.
+
+If you cannot say something both true and useful in one line, say nothing. The
+description slot still has to exist (reka-ui requires one) — render it empty
+and screen-reader-only.
+
 ---
 
 ## The principle behind the principles
