@@ -1,0 +1,10 @@
+dist
+node_modules
+test-results
+playwright-report
+smoke-artifacts
+bun.lock
+
+# GeoJSON: machine-written, hundreds of kB, and prettier would re-indent it
+# on every run for no reader benefit.
+public/maps/

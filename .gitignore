@@ -1,0 +1,34 @@
+# 依赖与构建产物
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# 环境变量（保留示例文件）
+.env
+.env.*
+!.env.example
+
+# 迁移工具的进程锁
+.ts-grm-migrate.lock
+
+# 编辑器与系统
+.idea/
+.DS_Store
+*.local
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 测试与本地 agent 产物
+test-results/
+playwright-report/
+.codewhale/
+.playwright-cli/
+smoke-artifacts/
+
+# 日志
+logs/
+*.log

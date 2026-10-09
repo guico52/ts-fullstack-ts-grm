@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <title>管理端模板</title>
+    <script>
+      /*
+       * 防闪烁：在首次绘制前应用已保存的主题。这段逻辑与
+       * src/stores/theme.ts 保持一致，存储键名必须同步 —— 设计系统守卫会
+       * 断言两处的键相同。
+       *
+       * 没有存过偏好时解析为暗色（见 lib/theme.ts），所以首次访问不会是
+       * 一闪而过的白屏。
+       */
+      ;(function () {
+        try {
+          var theme = localStorage.getItem("vat-theme")
+          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
+          var isDark = theme === "dark" || !theme || (theme === "system" && prefersDark)
+          document.documentElement.classList.toggle("dark", isDark)
+
+          var accent = localStorage.getItem("vat-accent")
+          if (accent === "green" || accent === "copper") {
+            document.documentElement.setAttribute("data-accent", accent)
+          }
+        } catch (e) {
+          /* 存储被禁用：<html> 上的 dark 类已经就位。 */
+        }
+      })()
+    </script>
+    <style>
+      /* 在样式表到达之前先画出正确的底色。 */
+      html.dark,
+      html.dark body {
+        background-color: oklch(0.13 0.025 245);
+        color: oklch(0.95 0.01 220);
+      }
+      html:not(.dark),
+      html:not(.dark) body {
+        background-color: oklch(0.97 0.008 220);
+        color: oklch(0.22 0.03 250);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

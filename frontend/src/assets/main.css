@@ -1,0 +1,358 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/inter";
+
+/*
+ * Class-based dark mode. The theme store toggles `dark` on <html>.
+ * Without this, Tailwind v4 defaults to prefers-color-scheme and an
+ * explicit in-app toggle could never win against the OS.
+ */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Bridge from our CSS variables to Tailwind's utility namespace.
+ * `inline` keeps the var() references live, so a token can be
+ * overridden by [data-accent] or .dark and every utility follows.
+ */
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /*
+   * 字号地板。
+   *
+   * 系统里最小的字号是 14px：`text-xs` 与 `text-sm` 都解析到它，所以提示、
+   * 徽章、表格单元格都不可能小到读不清。关键文本 —— 页面标题、卡片标题、
+   * 品牌名、导航项、表头 —— 从 16px 起。
+   *
+   * 覆盖 Tailwind 自己的标度，而不是逐个改调用点，是这条规则能守住的原因：
+   * 明天新增一个用 `text-xs` 的组件，它继承的是 14px，而不是把 12px 带回
+   * 来。lib/design-system.test.ts 还会拒绝任何小于 14px 的字面量。
+   */
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+
+  /*
+   * Inter 只覆盖拉丁字母。中文由紧跟其后的系统字体承担，顺序按各平台
+   * 的默认中文字体排：macOS/iOS 是苹方，Windows 是微软雅黑，Linux 是
+   * Noto。把中文放在 Inter 之后，混排时数字与英文仍走 Inter，字形统一。
+   */
+  --font-sans:
+    "Inter Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC",
+    "Source Han Sans SC", system-ui, sans-serif;
+}
+
+:root {
+  /*
+   * One radius for the whole app. Every control and surface derives from
+   * it, which is why nothing looks like it came from a different kit.
+   */
+  --radius: 0.625rem;
+
+  /*
+   * The brand colour decomposed into raw numbers. Only these three change
+   * when the accent switches; --primary recomposes from them. Copying a
+   * whole palette per accent is how theming drifts.
+   */
+  --brand-l: 0.52;
+  --brand-c: 0.115;
+  --brand-h: 178;
+
+  /* Light: "Fjord mist" — cool blue-tinted surfaces, dark ink. */
+  --background: oklch(0.97 0.008 220);
+  --foreground: oklch(0.22 0.03 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.03 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.03 250);
+  --primary: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
+  --primary-foreground: oklch(0.985 0.005 200);
+  --secondary: oklch(0.94 0.012 225);
+  --secondary-foreground: oklch(0.3 0.03 250);
+  --muted: oklch(0.94 0.012 225);
+  --muted-foreground: oklch(0.5 0.02 245);
+  --accent: oklch(0.93 calc(var(--brand-c) * 0.2) var(--brand-h));
+  --accent-foreground: oklch(0.32 calc(var(--brand-c) * 0.7) var(--brand-h));
+  --destructive: oklch(0.577 0.245 27.325);
+  /* Text on a destructive surface. A token rather than `text-white`, so a
+     future destructive colour is not stuck with a hard-coded
+     foreground that only works for this red. */
+  --destructive-foreground: oklch(0.985 0 0);
+
+  /*
+   * Hairlines are the depth cue in this system. In light mode a faint ring
+   * reads as an edge; in dark mode it is the only thing separating a card
+   * from the page, because the shadow is switched off there.
+   */
+  --border: oklch(0.9 0.01 230);
+  --input: oklch(0.9 0.01 230);
+  --ring: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
+
+  /*
+   * Categorical chart slots, fixed order: assign 1..5, never cycle.
+   * Adjacent-pair separation is only checked for slots used in sequence.
+   * chart-3 (amber) is under 3:1 on a white card, so any multi-series
+   * chart must keep a legend or a table view — colour is never the only
+   * channel carrying the information.
+   */
+  --chart-1: #2a78d6;
+  --chart-2: #1baf7a;
+  --chart-3: #eda100;
+  --chart-4: #008300;
+  --chart-5: #4a3aa7;
+
+  --sidebar: oklch(0.985 0.006 220);
+  --sidebar-foreground: oklch(0.22 0.03 250);
+  --sidebar-primary: var(--primary);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: oklch(0.9 0.01 230);
+  --sidebar-ring: var(--ring);
+
+  --primary-glow: oklch(var(--brand-l) var(--brand-c) var(--brand-h) / 15%);
+
+  /* The one panel shadow. See .dark: it is removed there on purpose. */
+  --shadow-card: 0 1px 2px oklch(0.3 0.03 250 / 6%);
+}
+
+.dark {
+  /* Dark: "Aurora night". The accent lifts into the glow band. */
+  --brand-l: 0.78;
+  --brand-c: 0.15;
+
+  --background: oklch(0.13 0.025 245);
+  --foreground: oklch(0.95 0.01 220);
+  --card: oklch(0.17 0.028 245);
+  --card-foreground: oklch(0.95 0.01 220);
+  --popover: oklch(0.17 0.028 245);
+  --popover-foreground: oklch(0.95 0.01 220);
+  --primary: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
+  --primary-foreground: oklch(0.13 0.025 245);
+  --secondary: oklch(0.22 0.03 245);
+  --secondary-foreground: oklch(0.95 0.01 220);
+  --muted: oklch(0.22 0.03 245);
+  --muted-foreground: oklch(0.66 0.02 240);
+  --accent: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
+  --accent-foreground: oklch(0.13 0.025 245);
+  --destructive: oklch(0.65 0.22 25);
+  --destructive-foreground: oklch(0.985 0 0);
+
+  /*
+   * Translucent white, not a fixed grey: a page, a card and a popover all
+   * sit on different surfaces, and one opaque border colour cannot serve
+   * all three.
+   */
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
+
+  /* Same hues re-stepped into the dark lightness band, validated as a set. */
+  --chart-1: #00a9a6;
+  --chart-2: #00a764;
+  --chart-3: #b58800;
+  --chart-4: #9e64ee;
+  --chart-5: #e9523f;
+
+  --sidebar: oklch(0.145 0.026 245);
+  --sidebar-foreground: oklch(0.92 0.01 220);
+  --sidebar-primary: var(--primary);
+  --sidebar-accent: oklch(0.2 0.028 245);
+  --sidebar-accent-foreground: oklch(0.95 0.01 220);
+  --sidebar-border: oklch(1 0 0 / 6%);
+  --sidebar-ring: var(--ring);
+
+  --primary-glow: oklch(var(--brand-l) var(--brand-c) var(--brand-h) / 20%);
+
+  /* Shadows are invisible on dark surfaces and only fog them. Borders carry depth here. */
+  --shadow-card: 0 0 #0000;
+}
+
+/*
+ * Accent variants. Chosen in the header and applied as data-accent on <html>.
+ * Teal is the default and carries no attribute, but its rule still exists so
+ * a scoped preview (the picker's swatches) has something to resolve against.
+ */
+[data-accent="teal"] {
+  --brand-l: 0.52;
+  --brand-c: 0.115;
+  --brand-h: 178;
+}
+.dark[data-accent="teal"],
+.dark [data-accent="teal"] {
+  --brand-l: 0.78;
+  --brand-c: 0.15;
+}
+
+[data-accent="green"] {
+  --brand-l: 0.5;
+  --brand-c: 0.13;
+  --brand-h: 155;
+}
+.dark[data-accent="green"],
+.dark [data-accent="green"] {
+  --brand-l: 0.76;
+  --brand-c: 0.17;
+}
+
+[data-accent="copper"] {
+  --brand-l: 0.52;
+  --brand-c: 0.1;
+  --brand-h: 60;
+}
+.dark[data-accent="copper"],
+.dark [data-accent="copper"] {
+  --brand-l: 0.72;
+  --brand-c: 0.11;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    box-sizing: border-box;
+  }
+
+  html {
+    @apply font-sans;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /*
+   * Scrollbars, everywhere. The platform bar is a wide grey channel that
+   * reads as browser chrome; next to these surfaces it is the loudest
+   * thing on the page.
+   *
+   * The thumb colour resolves against the scrolling element's own theme
+   * because var() in a custom property resolves where it is declared, not
+   * where it is used — so it is written inline rather than hoisted.
+   */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--muted-foreground) 38%, transparent);
+    border: 2px solid transparent;
+    /* Clipping to the padding box turns the border into breathing room:
+       a 10px bar draws a 6px thumb that still has a real grab target. */
+    background-clip: padding-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, var(--muted-foreground) 62%, transparent);
+  }
+
+  /* Chromium ignores ::-webkit-scrollbar on any element that also sets
+     scrollbar-width, so the standard properties go behind a support query
+     only engines without the pseudo-element ever see — Firefox, in practice. */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in oklab, var(--muted-foreground) 45%, transparent) transparent;
+    }
+  }
+
+  /*
+   * Anything clickable shows a hand.
+   *
+   * Tailwind v4 dropped preflight's `cursor: pointer` on buttons, on the
+   * grounds that the browser default for <button> is `default`. True, and
+   * it means every control in the app shows an arrow where it should show
+   * a hand until something puts it back. shadcn-vue's components do not.
+   *
+   * A rule here beats a class in each component: a primitive added later
+   * cannot forget it, and the base layer still loses to a utility, so
+   * `cursor-default` on a specific element wins when that is what is
+   * actually wanted.
+   *
+   * Disabled controls are excluded — they are not clickable, and claiming
+   * otherwise is worse than showing the default arrow.
+   */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([data-disabled]),
+  [role="menuitemcheckbox"]:not([data-disabled]),
+  [role="menuitemradio"]:not([data-disabled]),
+  [role="option"]:not([data-disabled]),
+  [role="switch"]:not(:disabled),
+  [role="checkbox"]:not(:disabled),
+  [role="radio"]:not(:disabled),
+  [role="combobox"]:not(:disabled),
+  [role="tab"]:not(:disabled),
+  summary,
+  label[for],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="file"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  /*
+   * iOS Safari force-zooms the page when a focused input renders below
+   * 16px. Deliberately unlayered: unlayered CSS outranks Tailwind's
+   * layered utilities, so this wins over any per-element text-* class.
+   */
+  @media (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+}
+
+/* One shared glass recipe: map overlays, sticky headers, toasts. */
+@utility surface-glass {
+  background: color-mix(in oklab, var(--background) 85%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+}
