@@ -54,6 +54,9 @@ PG_INTEGRATION=1 bun test tests/integration
 - `PG_HOST` / `PG_PORT` / `PG_DATABASE` / `PG_USER` / `PG_PASSWORD`：PostgreSQL 连接
 - `CORS_ORIGINS`：允许的前端来源，逗号分隔
 - `ENABLE_DOCS`：接口文档开关；不设置时非 production 默认开启
+- `ADMIN_EMAIL` / `ADMIN_PWD`：初始管理员。**每次启动**检查有没有 name 为
+  `admin` 的账号，没有就用这两个值创建；**已有则完全不动**，改过的密码不会
+  被重启覆盖。任一项为空时跳过。改掉 admin 的名字会让它在下次启动重跑。
 
 ## 目录
 

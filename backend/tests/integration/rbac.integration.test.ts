@@ -9,6 +9,7 @@
 import { afterAll, describe, expect, it } from "bun:test";
 import { createApp } from "../../src/app.ts";
 import { close, pool } from "../../src/model/index.ts";
+import { ensureAdminUser } from "../../src/modules/rbac/user/bootstrap.ts";
 
 const enabled = process.env.PG_INTEGRATION === "1";
 // 加时间戳，避免多次运行时相互冲突。
@@ -556,6 +557,67 @@ describe.skipIf(!enabled)("auth（真实 pg）", () => {
     expect(noSuchUser.status).toBe(401);
     // 响应体必须一模一样，否则匿名调用方可以拿它探测邮箱是否注册过。
     expect(await wrongPassword.json()).toEqual(await noSuchUser.json());
+  });
+});
+
+describe.skipIf(!enabled)("bootstrap（真实 pg）", () => {
+  afterAll(async () => {
+    await pool.query("DELETE FROM sys_user WHERE name LIKE 'it-admin%'");
+  });
+
+  const ADMIN = `it-admin-${STAMP}`;
+
+  it("没有该名字的账号时创建，已有则不覆盖", async () => {
+    const options = {
+      name: ADMIN,
+      email: `${ADMIN}@example.com`,
+      password: "admin-secret-123",
+    };
+    await ensureAdminUser(options);
+
+    const created = await pool.query("SELECT id, email, organization_id FROM sys_user WHERE name = $1", [
+      ADMIN,
+    ]);
+    expect(created.rows).toHaveLength(1);
+
+    // 建出来的是一条**能用的凭据**，不只是行数据。
+    const login = await send("/auth/login", "POST", {
+      email: options.email,
+      password: options.password,
+    });
+    expect(login.status).toBe(200);
+
+    // 再跑一次，故意换一个邮箱与口令：已存在的那一行不该被动。
+    await ensureAdminUser({ name: ADMIN, email: "changed@example.com", password: "another-secret" });
+    const again = await pool.query("SELECT email FROM sys_user WHERE name = $1", [ADMIN]);
+    expect(again.rows).toHaveLength(1);
+    expect(again.rows[0].email).toBe(options.email);
+    // 原口令仍然有效，新口令无效——说明口令也没被覆盖。
+    expect(
+      (
+        await send("/auth/login", "POST", { email: options.email, password: options.password })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await send("/auth/login", "POST", { email: options.email, password: "another-secret" })
+      ).status,
+    ).toBe(401);
+  });
+
+  it("新建的管理员挂在一个真实存在的组织下", async () => {
+    await ensureAdminUser({
+      name: `${ADMIN}-2`,
+      email: `it-admin2-${STAMP}@example.com`,
+      password: "admin-secret-123",
+    });
+
+    // users.organization_id 是 NOT NULL，所以初始化必须自己解决组织。
+    const joined = await pool.query(
+      "SELECT o.id FROM sys_user u JOIN sys_organization o ON o.id = u.organization_id WHERE u.name = $1",
+      [`${ADMIN}-2`],
+    );
+    expect(joined.rows).toHaveLength(1);
   });
 });
 

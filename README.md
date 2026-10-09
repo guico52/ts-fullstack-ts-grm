@@ -54,7 +54,7 @@ podman run -d --rm --name ts-grm-pg \
 ```bash
 bun install                                     # 在仓库根安装（workspace 统一锁定依赖）
 
-cp backend/.env.example backend/.env            # 按需修改 PG_* 连接信息
+cp backend/.env.example backend/.env            # 按需修改 PG_* 与 ADMIN_*
 bun run --filter @ts-fullstack-ts-grm/backend db:deploy   # 应用迁移，建表
 
 bun run dev                 # 前后端一起启动，日志分别带 [backend] / [frontend] 前缀
@@ -65,6 +65,10 @@ bun run dev                 # 前后端一起启动，日志分别带 [backend] 
 
 后端连接池是**懒建立**的：进程启动时不会连库，首次访问数据库才连。数据库没起也能
 启动服务、通过 `/health` 探活，由 `/health/db` 如实报告 `503`。
+
+**首次启动会创建一个管理员**（若库里还没有 `name` 为 `admin` 的账号），用的是
+`.env` 里的 `ADMIN_EMAIL` / `ADMIN_PWD`。之后就不再动它——改密码请直接改库，
+重启**不会**把它重置回去。登录页在 `http://localhost:5173/login`。
 
 ## 检查
 

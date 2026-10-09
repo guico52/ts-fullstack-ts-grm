@@ -7,7 +7,11 @@ applyPatches();
 
 export const SysUser = model("SysUser", "id", class {
   id = prop.i64().autoIncrement().asString();
-  name = prop.text();
+  /**
+   * `str` 而不是 `text`，理由同下面的 `email`：两者 DDL 相同，但 `prop.text()`
+   * 的列在 ts-grm 里无法参与查询。管理员初始化要按 name 找人，所以它必须是 STR。
+   */
+  name = prop.str(255);
   /**
    * `str` 而不是 `text`。两者生成的 DDL **完全一样**（都是 `text`，不会产生
    * 迁移），区别在运行时 scalarType：`prop.text()` 是 TEXT，在 ts-grm 里

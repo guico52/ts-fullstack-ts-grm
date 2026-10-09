@@ -43,6 +43,24 @@ export const userRepository = {
     return run(() => findOne(client, id));
   },
 
+  /**
+   * 按显示名找一行。
+   *
+   * 管理员初始化用它判断"该不该建"（见 bootstrap.ts）。`name` 没有唯一约束，
+   * 所以这里取首行；初始化只在启动时跑，同名多行时只要有一行就说明建过了。
+   */
+  findByName(name: string) {
+    return run(async () => {
+      const [row] = await client
+        .createQuery(SysUser, (q, user) => {
+          q.where(user.name.eq(name));
+          return q.select(user.fetch(UserView));
+        })
+        .fetchList();
+      return row ?? null;
+    });
+  },
+
   create(body: UserModel["createBody"]) {
     return transaction(async (session) => {
       // 口令只存哈希；明文不进数据库，也不出现在任何响应里。

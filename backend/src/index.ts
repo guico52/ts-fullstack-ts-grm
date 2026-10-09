@@ -1,5 +1,6 @@
 import { createApp } from "./app.ts";
 import { close } from "./model";
+import { ensureAdminUser } from "./modules/rbac/user/bootstrap.ts";
 
 const port = Number(process.env.PORT ?? 3000);
 const app = createApp();
@@ -13,6 +14,18 @@ if (process.env.ENABLE_DOCS !== "false" && process.env.NODE_ENV !== "production"
 console.log(
   `数据库：${process.env.PG_DATABASE ?? "ts_fullstack_ts_grm"} @ ${process.env.PG_HOST ?? "127.0.0.1"}:${process.env.PG_PORT ?? 5432}（pg 连接池懒建立）`,
 );
+
+/**
+ * 管理员初始化在**监听之后**跑，而且失败不阻止启动。
+ *
+ * 库没起时服务仍然可用、由 `/health/db` 如实报告 503 —— 这个性质不该因为
+ * 初始化而丢掉。初始化是尽力而为的便利，不是启动的前置条件。
+ */
+try {
+  await ensureAdminUser();
+} catch (error) {
+  console.warn("管理员初始化失败（服务照常运行）：", error instanceof Error ? error.message : error);
+}
 
 let shuttingDown = false;
 

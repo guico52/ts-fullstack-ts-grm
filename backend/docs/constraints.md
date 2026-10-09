@@ -223,6 +223,23 @@ export function rbacModule() {
 
 ## 7. 配置与迁移
 
+### 启动时初始化管理员
+
+`src/index.ts` 在**监听之后**调 `ensureAdminUser()`（`modules/rbac/user/bootstrap.ts`）：
+若不存在 `name = "admin"` 的账号，就用 `ADMIN_EMAIL` / `ADMIN_PWD` 建一个。
+
+- **幂等，而且不覆盖。** 存在就什么都不做 —— 改过的密码不会在下次重启被悄悄
+  重置回 `.env` 里的值。重置密码应该是显式动作，不是重启的副作用。
+- **判据是名字不是邮箱。** 名字是“初始化过没有”的标记；代价是把 admin 改名
+  之后会再建一个，这是有意的（想重跑就改名）。
+- **失败不阻止启动。** 包在 try/catch 里，库没起时服务照常运行、由 `/health/db`
+  如实报告。初始化是便利，不是启动的前置条件——这也是它放在监听之后的原因。
+- **日志不打印口令。** 启动日志常常被收集和转发，只报名字与邮箱。
+- 用户必须属于一个组织（列 NOT NULL）。取第一个组织；一个都没有时建一个
+  “默认组织”，让全新库也能直接启动。
+- 函数接受可注入的 `{ name, email, password }`，集成测试传自己的名字，
+  不去碰真实的 admin。
+
 **没有独立的 config 模块。** 应用侧直接读 `process.env`（Bun 会自动加载 `backend/.env`）。
 
 迁移配置 `ts-grm-migrate.config.ts` 是独立入口：它跑在 Node 下（不会自动读 `.env`），
