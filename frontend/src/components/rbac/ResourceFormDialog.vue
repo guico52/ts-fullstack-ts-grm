@@ -125,7 +125,7 @@ async function submit(): Promise<void> {
 
 <template>
   <Dialog :open="open" @update:open="(value: boolean) => emit('update:open', value)">
-    <DialogContent class="sm:max-w-lg">
+    <DialogContent class="sm:max-w-lg" draggable>
       <!-- The footer lives inside the form so Enter submits and the confirm
            button can be type="submit", per the form conventions. -->
       <form class="space-y-5" @submit.prevent="submit">
