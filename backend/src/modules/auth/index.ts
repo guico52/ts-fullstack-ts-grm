@@ -1,6 +1,8 @@
 import { Elysia } from "elysia";
 import { jwt } from "@elysiajs/jwt";
 
+import { accessRepository } from "./access.ts";
+import { authGuard } from "./guard.ts";
 import { AuthModel } from "./model.ts";
 import { JWT_EXPIRES_IN, resolveJwtSecret } from "./secret.ts";
 import { authService } from "./service.ts";
@@ -33,5 +35,12 @@ export function authModule() {
       body: AuthModel.loginBody,
       response: { 200: AuthModel.loginResult },
       detail: { summary: "用邮箱与口令换用户信息与 token", tags: ["auth"] },
+    })
+    // authGuard 挂在 login **之后**：它只对之后加入的路由生效，所以登录本身
+    // 不需要凭据（否则谁也无法登录）。
+    .use(authGuard)
+    .get("/me/access", ({ user }) => accessRepository.forUser(user.id), {
+      response: { 200: AuthModel.access },
+      detail: { summary: "当前用户可访问的视图与权限点", tags: ["auth"] },
     });
 }

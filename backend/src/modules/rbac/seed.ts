@@ -1,5 +1,7 @@
 import { permissionRepository } from "./permission/repository.ts";
 import { roleRepository } from "./role/repository.ts";
+import { BUILT_IN_ADMIN_NAME } from "./user/bootstrap.ts";
+import { userRepository } from "./user/repository.ts";
 import { viewRepository } from "./view/repository.ts";
 
 /**
@@ -81,6 +83,30 @@ export async function seedSystemData(): Promise<void> {
   const libraryViewIds = await seedLibraryViews();
   const permissionIds = await seedPermissions();
   await seedRoles(libraryViewIds, permissionIds);
+  await bindBuiltInAdmin();
+}
+
+/* ------------------------------------------------------------ 内置管理员 */
+
+/**
+ * 把内置的 admin 用户放进「管理员」角色 —— **只加他一个**。
+ *
+ * 没有这一步，seed 出来的角色是空的：角色建好了、权限也齐了，但没人绑上去，
+ * 于是管理员登录后什么都访问不了。这很容易被误读成“鉴权坏了”。
+ *
+ * 用 `addMember` 而不是 `update({ userIds })`：后者的语义是整体替换，会把
+ * 角色里已有的成员全部踢掉。这里要的只是“保证这一行存在”。
+ *
+ * 没配 `ADMIN_EMAIL`（于是没有内置 admin）或者角色被改名时，静默跳过。
+ */
+async function bindBuiltInAdmin(): Promise<void> {
+  const admin = await userRepository.findByName(BUILT_IN_ADMIN_NAME);
+  if (!admin) return;
+
+  const role = await roleRepository.findByName(ROLE_ADMIN);
+  if (!role) return;
+
+  await roleRepository.addMember(role.id, admin.id);
 }
 
 /* ------------------------------------------------------------------ 视图 */

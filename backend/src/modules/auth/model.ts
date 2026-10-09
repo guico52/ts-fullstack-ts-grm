@@ -24,11 +24,28 @@ const loginResult = t.Object({ id, name: t.String(), email: t.String(), token: t
 /** 写进 token 的载荷。`sub` 是用户 id，其余两个只是为了调试时看得懂。 */
 const tokenPayload = t.Object({ sub: id, name: t.String(), email: t.String() });
 
+/** 一个可访问的视图。`path` / `componentName` 对菜单和按钮为空。 */
+const accessView = t.Object({
+  id,
+  name: t.String(),
+  icon: t.String(),
+  path: t.Union([t.String(), t.Null()]),
+  componentPath: t.Union([t.String(), t.Null()]),
+  componentName: t.Union([t.String(), t.Null()]),
+  type: t.String(),
+  parentId: t.Union([id, t.Null()]),
+  sort: t.Number(),
+});
+
+/** 当前用户能做什么：能到达的视图，以及握在手里的权限点。 */
+const access = t.Object({ views: t.Array(accessView), permissions: t.Array(t.String()) });
+
 export const AuthModel = {
   loginBody: t.Object({ email, password }, { additionalProperties: false }),
   session,
   loginResult,
   tokenPayload,
+  access,
 } as const;
 
 export type AuthModel = {

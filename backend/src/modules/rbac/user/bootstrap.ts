@@ -3,6 +3,9 @@ import { userRepository } from "./repository.ts";
 
 const ADMIN_NAME = "admin";
 
+/** 内置管理员的名字。初始化要用它找人（见 seed.ts 的绑定那一步）。 */
+export const BUILT_IN_ADMIN_NAME = ADMIN_NAME;
+
 /**
  * 确保有一个初始管理员。
  *

@@ -112,6 +112,19 @@ export const roleRepository = {
     });
   },
 
+  /** 按名字找一行。初始化用它判断角色是否已存在。 */
+  findByName(name: string) {
+    return run(async () => {
+      const [row] = await client
+        .createQuery(SysRole, (q, role) => {
+          q.where(role.name.eq(name));
+          return q.select(role.fetch(RoleView));
+        })
+        .fetchList();
+      return row ?? null;
+    });
+  },
+
   /** 软删除：置 deleted_at，行与关联保留；全局过滤器会让它从后续查询中消失。 */
   remove(id: string) {
     return transaction(async (session) => {
@@ -120,6 +133,26 @@ export const roleRepository = {
         [id],
       );
       return result.rowCount !== 0;
+    });
+  },
+
+  /**
+   * 把一个用户加进角色，**只加他一个**。
+   *
+   * 不能用 `update({ userIds })` 代替：那个语义是「整体替换」，会把角色里
+   * 已有的其他成员全部踢掉。初始化要把内置 admin 放进管理员角色，那种时候
+   * 一个“只保证这一行存在”的动作才是对的。
+   *
+   * 幂等：已经在了就不动（`ON CONFLICT DO NOTHING`）。
+   */
+  addMember(roleId: string, userId: string) {
+    return transaction(async (session) => {
+      await session.query(
+        `INSERT INTO sys_role_user_mapping (role_id, user_id)
+              VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [roleId, userId],
+      );
     });
   },
 };

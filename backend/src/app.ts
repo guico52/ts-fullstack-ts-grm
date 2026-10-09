@@ -11,7 +11,9 @@ import {
   ResourceNotFoundError,
 } from "./errors.ts";
 import { ready } from "./model";
+import { authGuard } from "./modules/auth/guard.ts";
 import { authModule } from "./modules/auth";
+import { permissionGuard } from "./modules/auth/permission.ts";
 import { bookModule } from "./modules/book";
 import { rbacModule } from "./modules/rbac";
 
@@ -97,9 +99,15 @@ export function createApp() {
       },
       detail: { summary: "业务表可读性探针", tags: ["health"] },
     })
+    // 顺序是有意义的。Elysia 的生命周期钩子只对**之后**加入的路由生效：
+    //   - /health 与 /auth/login 在上面注册，不受下面的守卫影响；
+    //   - authModule 里的 /auth/me/access 在模块内部自己挂了 authGuard；
+    //   - 两个守卫之后的业务路由才真的被保护起来。
+    .use(authModule())
+    .use(authGuard)
+    .use(permissionGuard)
     .use(rbacModule())
     .use(bookModule())
-    .use(authModule())
 
   if (enableDocs) {
     app.use(

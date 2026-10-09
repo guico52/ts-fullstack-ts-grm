@@ -27,12 +27,23 @@ export const SysUser = model("SysUser", "id", class {
   name = prop.str(100);
   /** 登录按邮箱查人，见 modules/auth/repository.ts。 */
   email = prop.str(255);
-  /**
-   * 只被读出来、交给 `Bun.password.verify` 比对 —— **比对发生在应用层**，
+  /** 只被读出来、交给 `Bun.password.verify` 比对 —— **比对发生在应用层**，
    * SQL 里永远不会出现 `pwd_hash = ...`，所以它不需要可查询：保持 `text()`。
    */
   pwdHash = prop.text();
   organization = prop.m2o(SysOrganization);
+  /**
+   * `SysRole.users` 的反向。不新增列——它复用同一张中间表，所以**不产生迁移**。
+   *
+   * 直接传 `SysRole` 而**不是** `() => SysRole`：lambda 形式只允许用于自关联，
+   * 对其他模型会报 `Illegal property ... Lambda argument can only be used for
+   * recursive associations`。引用在后面定义的模型是可以的（与
+   * `organization = prop.m2o(SysOrganization)` 同理）。
+   *
+   * 有了它，“这个用户能访问什么”就能从用户侧一次查出来（见
+   * modules/auth/access.ts），不必按关联条件去筛角色。
+   */
+  roles = prop.m2m(SysRole).mappedBy("users");
   audit = auditFields;
   deletedAt = prop.dt().nullable();
 });

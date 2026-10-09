@@ -19,9 +19,26 @@ const STAMP = Date.now();
 // 一个应用与一组请求助手：工厂设计使得多次 `createApp()` 也各自独立。
 const app = createApp();
 
-function call(path: string, init?: RequestInit) {
-  return app.handle(new Request(`http://localhost${path}`, init));
+/**
+ * 业务路由现在都过 `authGuard` + `permissionGuard`，所以测试得有个身份。
+ *
+ * 用内置的 admin 登录一次，之后 `call` 自动带上它的 token。凭据来自 `.env`
+ * （`ADMIN_EMAIL` / `ADMIN_PWD`）—— 测试本来就依赖 `.env` 里的数据库连接，
+ * 再依赖这一对不算多。
+ *
+ * 权限守卫**每次请求都查库**，所以这个 token 背后的权限是实时的，不是签发的
+ * 那一刻的快照。
+ */
+let adminToken = "";
+
+function call(path: string, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  if (adminToken && !headers.has("authorization")) {
+    headers.set("authorization", `Bearer ${adminToken}`);
+  }
+  return app.handle(new Request(`http://localhost${path}`, { ...init, headers }));
 }
+
 function send(path: string, method: string, body: unknown) {
   return call(path, {
     method,
@@ -31,6 +48,23 @@ function send(path: string, method: string, body: unknown) {
 }
 function json<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
+}
+
+if (enabled) {
+  const response = await app.handle(
+    new Request("http://localhost/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: process.env.ADMIN_EMAIL ?? "admin@example.com",
+        password: process.env.ADMIN_PWD ?? "",
+      }),
+    }),
+  );
+  if (!response.ok) {
+    throw new Error(`集成测试无法以 admin 登录（${response.status}），检查 .env 的 ADMIN_*`);
+  }
+  adminToken = ((await response.json()) as { token: string }).token;
 }
 
 describe.skipIf(!enabled)("rbac（真实 pg）", () => {
@@ -692,6 +726,127 @@ describe.skipIf(!enabled)("seed（真实 pg）", () => {
     // “不可访问系统管理页面”同样是一个否定断言：一个都不能在。
     const systemPages = ["系统管理", "用户管理", "视图管理", "角色管理", "权限管理"];
     expect(names.filter((name) => systemPages.includes(name))).toEqual([]);
+  });
+});
+
+describe.skipIf(!enabled)("鉴权与授权（真实 pg）", () => {
+  const VIEWER_EMAIL = `it-viewer-${STAMP}@example.com`;
+  const VIEWER_PWD = "viewer-secret-123";
+
+  afterAll(async () => {
+    // 观察者是本组临时造的用户；内置 admin 不动。
+    await pool.query(
+      "DELETE FROM sys_role_user_mapping WHERE user_id IN (SELECT id FROM sys_user WHERE email = $1)",
+      [VIEWER_EMAIL],
+    );
+    await pool.query("DELETE FROM sys_user WHERE email = $1", [VIEWER_EMAIL]);
+  });
+
+  /** 登录并拿到 token。失败时直接抛，不返回半个凭据。 */
+  async function login(email: string, password: string): Promise<string> {
+    const response = await send("/auth/login", "POST", { email, password });
+    expect(response.status).toBe(200);
+    const body = await json<{ token: string }>(response);
+    return body.token;
+  }
+
+  const asBearer = (token: string) => ({ headers: { authorization: `Bearer ${token}` } });
+
+  /** 带 token 的写请求。`send` 不带 headers，所以这里手写一份。 */
+  const authSend = (token: string, path: string, method: string, body: unknown) =>
+    call(path, {
+      method,
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+
+  it("没有凭据访问业务路由一律 401，/health 不受影响", async () => {
+    // 绕过 `call`：它会给每个请求带上 admin 的 token，而这一条要的正是“没有”。
+    const anonymous = (path: string) => app.handle(new Request(`http://localhost${path}`));
+
+    expect((await anonymous("/rbac/views")).status).toBe(401);
+    expect((await anonymous("/book/books")).status).toBe(401);
+    expect((await anonymous("/health")).status).toBe(200);
+  });
+
+  it("坏 token 也是 401，而不是当成匿名放行", async () => {
+    expect((await call("/rbac/views", { headers: { authorization: "Bearer nonsense" } })).status).toBe(
+      401,
+    );
+  });
+
+  it("管理员带 token 能读业务路由，也拿得到自己的可达集合", async () => {
+    const token = await login("admin@example.com", process.env.ADMIN_PWD ?? "");
+
+    expect((await call("/rbac/views", asBearer(token))).status).toBe(200);
+
+    const access = await json<{ views: Array<{ path: string | null }>; permissions: string[] }>(
+      await call("/auth/me/access", asBearer(token)),
+    );
+    // 管理员角色是“全部”，所以这两个数字应当与库里的一致。
+    const counts = await pool.query(
+      `SELECT (SELECT count(*)::int FROM sys_view WHERE deleted_at IS NULL) views,
+              (SELECT count(*)::int FROM sys_permission WHERE deleted_at IS NULL) perms`,
+    );
+    expect(access.views).toHaveLength(counts.rows[0].views);
+    expect(access.permissions).toHaveLength(counts.rows[0].perms);
+    // 前端拿它配路由，重复的 path 会让 addRoute 抛错。
+    const paths = access.views.map((view) => view.path).filter((path) => path !== null);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  it("观察者：能读图书业务，读不了系统管理，也改不了任何东西", async () => {
+    // 造一个观察者：建用户 + 加入内置的「观察者」角色。
+    const org = await json<{ id: string }>(
+      await send("/rbac/organizations", "POST", {
+        name: "IT-观察者组织",
+        code: `IT-VIEWER-${STAMP}`,
+      }),
+    );
+    const viewer = await json<{ id: string }>(
+      await send("/rbac/users", "POST", {
+        name: "IT-观察者",
+        email: VIEWER_EMAIL,
+        password: VIEWER_PWD,
+        organizationId: org.id,
+      }),
+    );
+    // 直接用 SQL 绑到内置的「观察者」角色：这时还没有 token，走不了 HTTP。
+    const builtIn = await pool.query("SELECT id FROM sys_role WHERE name = $1 AND deleted_at IS NULL", [
+      ROLE_VIEWER,
+    ]);
+    await pool.query("INSERT INTO sys_role_user_mapping (role_id, user_id) VALUES ($1, $2)", [
+      builtIn.rows[0].id,
+      viewer.id,
+    ]);
+
+    const token = await login(VIEWER_EMAIL, VIEWER_PWD);
+    const auth = asBearer(token);
+
+    // 读图书业务：可以。
+    expect((await call("/book/books", auth)).status).toBe(200);
+    expect((await call("/book/authors", auth)).status).toBe(200);
+
+    // 读系统管理：403 —— 观察者的视图列表里没有它们，权限也不在其中。
+    expect((await call("/rbac/views", auth)).status).toBe(403);
+    expect((await call("/rbac/users", auth)).status).toBe(403);
+
+    // 写图书业务：403 —— 手里只有 read，没有 create / update / delete。
+    expect((await authSend(token, "/book/authors", "POST", { name: "IT-不该建成" })).status).toBe(403);
+    expect((await authSend(token, "/book/stores", "POST", { name: "IT-不该建成" })).status).toBe(403);
+
+    // 被拦住之后，库里不该多出任何东西 —— 403 必须发生在写入之前。
+    const leaked = await pool.query("SELECT count(*)::int n FROM author WHERE name LIKE 'IT-不该建成%'");
+    expect(leaked.rows[0].n).toBe(0);
+
+    // 观察者的可达集合只剩图书管理那一组。
+    const access = await json<{ views: Array<{ name: string }>; permissions: string[] }>(
+      await call("/auth/me/access", auth),
+    );
+    expect(access.permissions).toEqual(["book.author.read", "book.book.read", "book.store.read"]);
+    expect(access.views.map((view) => view.name).sort()).toEqual(
+      ["图书管理", "图书", "作者", "书店"].sort(),
+    );
   });
 });
 
