@@ -10,8 +10,14 @@ const entity = t.Object({
   id,
   name,
   email,
-  // 所属组织只暴露 id 与名称，不外泄组织的其余字段。
-  organization: t.Object({ id, name: t.String() }),
+  /**
+   * 所属组织只暴露 id 与名称，不外泄组织的其余字段。
+   *
+   * **可能为 null**：组织被软删除后，全局过滤器也会把它从关联查询里
+   * 滤掉，于是这里读出来是 null。契约写清楚这一点，而不是让类型说谎
+   * （实测：软删组织后 GET /rbac/users/:id 返回 organization: null）。
+   */
+  organization: t.Union([t.Object({ id, name: t.String() }), t.Null()]),
 });
 
 export const UserModel = {

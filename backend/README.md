@@ -97,7 +97,7 @@ tests/                     单测；tests/integration/ 需真实库
 各资源的差异：
 
 - **users**：`organizationId` 引用组织，响应里嵌套 `organization: { id, name }`；
-  `password` 只存哈希（`Bun.password`），从不回显。
+  `password` 只存哈希（`Bun.password`），从不回显。组织被软删除后 `organization` 为 `null`。
 - **views**：`parentId` 自引用，列表支持 `?parentId=` 过滤，`PATCH` 传 `parentId: null` 回到根。
   层级是严格的三层，由 service 强制（违反返回 `422 INVALID_HIERARCHY`）：
 
@@ -118,8 +118,10 @@ tests/                     单测；tests/integration/ 需真实库
   省略则保留原值。
 - **books**：`storeId` 指向书店（列 NOT NULL，所以必填），`authorIds` 与作者是多对多
   （中间表 `book_author_mapping`），同样传了就整体替换。
+  `store` 在书店被软删除后是 `null`，`authors` 会相应地少几个。
   `price` 是 `numeric(10, 2)`，出参是**数字**（88.50 → `88.5`），前端负责补回两位小数。
-- **authors / stores**：只暴露自身字段。它们是**被指向**的一方，写入发生在图书那一侧。
+- **authors / stores**：只暴露自身字段。它们是**被指向**的一方，写入发生在图书那一侧；
+  软删除它们不会动图书的 `store_id` 与中间表，只是那些引用再也读不出来。
 
 ## 关键设计
 
@@ -142,7 +144,8 @@ tests/                     单测；tests/integration/ 需真实库
 **连接池懒建立。** 进程启动不连库，首次查询才连；数据库没起也能启动并通过 `/health` 探活。
 
 **软删除是全局过滤器。** `model/index.ts` 用 `createGlobalFilterManager(entityManager)` 注册一次，
-所有查询自动排除 `deleted_at` 非空的行，repository 里不必重复写条件。
+所有查询自动排除 `deleted_at` 非空的行，repository 里不必重复写条件。**关联查询同样被过滤**，
+所以指向已删除行的对象投影会是 `null`（见约束文档第 9 节）。
 
 **事务内可读到未提交的写。** `transaction((session) => ...)` 里用 `clientFor(session)`
 取得的 ts-grm 客户端复用同一 pg 会话，`INSERT` 之后能立刻读回完整视图。

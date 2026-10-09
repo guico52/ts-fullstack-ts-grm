@@ -14,7 +14,18 @@ const entity = t.Object({
   name,
   edition,
   price,
-  store: t.Object({ id, name: t.String() }),
+  /**
+   * **可能为 null**：书店被软删除后，全局过滤器也会把它从关联查询里
+   * 滤掉，于是这里读出来是 null。
+   *
+   * `store_id` 列本身是 NOT NULL 且无法置空（写入时不允许），所以
+   * null 只意味着“指向的书店已经不在”，不意味着这本书没有书店。
+   */
+  store: t.Union([t.Object({ id, name: t.String() }), t.Null()]),
+  /**
+   * 数组本身不会是 null，但已软删除的作者会从里面消失——
+   * 关联查询同样被全局过滤器管着。
+   */
   authors: t.Array(t.Object({ id, name: t.String() })),
 });
 

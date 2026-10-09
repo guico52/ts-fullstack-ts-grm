@@ -251,6 +251,12 @@ bun run db:push            # 直接把库同步成模型形状（不写历史，
 - **多对多只在拥有中间表的一侧写 `joinTable`**，另一侧用 `.mappedBy("对方的字段名")`。
   两侧各写一个 `joinTable` 不报错，但迁移工具会生成**两张中间表**：一张永远是空的，
   而写入只落进其中一张。
+- **软删除会让关联“变得可能为 null”。** 全局过滤器按列名注册，**关联查询也被它管着**：
+  软删除一个组织后，`GET /rbac/users/:id` 的 `organization` 读出来是 `null`；软删除书店后，
+  图书的 `store` 同样是 `null`。所以 response schema 里，**任何指向可软删除实体的对象投影
+  都要允许 null**（`t.Union([t.Object({ ... }), t.Null()])`），否则契约就与响应不符 —— 而
+  Elysia 的 response 校验**不一定**替你发现（实测它老老实实返回了 200 + `null`）。
+  列表形式的关联不会变成 `null`，但会**少几个**：已删除的成员从数组里消失。
 - **`EntityManager.combine`** 的类型是「恰好两个」参数（`AtLeastTwo = [T, T]`），运行时却遍历全部
   入参；改用 `EntityManager.of(dir, path)` 扫描目录注册模型，避免这个限制。
 - **`EntityManager.of`** 的 baseDir 必须是**已存在的目录**（否则抛 `ArgumentError`），

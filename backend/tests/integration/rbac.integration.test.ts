@@ -303,6 +303,23 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
     expect(cleared.componentName).toBeNull();
   });
 
+  it("user：所属组织被软删除后，引用读出来是 null", async () => {
+    const org = await createOrganization(`ORG-NULL-${STAMP}`);
+    const created = await send("/rbac/users", "POST", {
+      name: "IT-用户",
+      email: `it-null-${STAMP}@example.com`,
+      password: "secret123",
+      organizationId: org.id,
+    });
+    const user = await json<{ id: string; organization: { id: string } | null }>(created);
+    expect(user.organization?.id).toBe(org.id);
+
+    expect((await call(`/rbac/organizations/${org.id}`, { method: "DELETE" })).status).toBe(200);
+
+    const after = await json<typeof user>(await call(`/rbac/users/${user.id}`));
+    expect(after.organization).toBeNull();
+  });
+
   it("role：创建即绑定三类关联，PATCH 只替换传入的那一类", async () => {
     const org = await createOrganization(`IT-ROLE-ORG-${STAMP}`);
     const user = await json<{ id: string }>(
@@ -451,6 +468,38 @@ describe.skipIf(!enabled)("book（真实 pg）", () => {
       storeId: store.id,
     });
     expect(response.status).toBe(422);
+  });
+
+  it("book：被软删除的书店与作者不再出现在关联里", async () => {
+    const store = await json<{ id: string }>(await createStore("书店4"));
+    const author = await json<{ id: string }>(await createAuthor("作者丙"));
+
+    const created = await send("/book/books", "POST", {
+      name: `IT-孤儿-${STAMP}`,
+      edition: 1,
+      price: 1,
+      storeId: store.id,
+      authorIds: [author.id],
+    });
+    expect(created.status).toBe(201);
+    const book = await json<{
+      id: string;
+      store: { id: string; name: string } | null;
+      authors: Array<{ id: string }>;
+    }>(created);
+    expect(book.store?.id).toBe(store.id);
+    expect(book.authors.map((a) => a.id)).toEqual([author.id]);
+
+    // 全局过滤器按列名注册，**关联查询也被它管着**：软删除书店与作者后，
+    // 书还是那本书，但两边的引用都读不出来了。
+    expect((await call(`/book/stores/${store.id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await call(`/book/authors/${author.id}`, { method: "DELETE" })).status).toBe(200);
+
+    const after = await json<typeof book>(await call(`/book/books/${book.id}`));
+    // 契约里写明了可能是 null —— store_id 仍是那本书的，只是指向的行没了。
+    expect(after.store).toBeNull();
+    // 作者是列表，所以表现为“少一个”而不是 null。
+    expect(after.authors).toEqual([]);
   });
 });
 
