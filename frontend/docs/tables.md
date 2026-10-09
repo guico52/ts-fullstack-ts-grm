@@ -1,6 +1,6 @@
 # Tables and filters
 
-Reference implementation: `src/views/OrganizationsView.vue` — CRUD plus
+Reference implementation: `src/views/system/OrganizationsView.vue` — CRUD plus
 pagination where the server owns the page.
 
 **Every table is paginated.** This is principle 13 and a guard enforces it:

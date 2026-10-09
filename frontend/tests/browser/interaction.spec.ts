@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 import { gotoPage, settleTransitions } from "./helpers"
 
 /**
@@ -20,7 +20,14 @@ import { gotoPage, settleTransitions } from "./helpers"
 const INTERACTIVE =
   'button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"]), [role="tab"]:not([aria-disabled="true"]), [role="menuitem"]:not([data-disabled]), [role="option"]:not([data-disabled]), [role="switch"]:not(:disabled), [role="combobox"]:not(:disabled), select:not(:disabled)'
 
-const PAGES = ["/", "/system/organizations", "/system/users", "/system/views", "/system/roles", "/system/permissions"]
+const PAGES = [
+  "/",
+  "/system/organizations",
+  "/system/users",
+  "/system/views",
+  "/system/roles",
+  "/system/permissions",
+]
 
 /** Every control on the page whose cursor is not a hand. */
 async function findWrongCursor(page: Page): Promise<string[]> {
@@ -93,7 +100,7 @@ test.describe("hover feedback", () => {
       await button.hover()
       await settleTransitions(button)
       const after = await button.evaluate((el) => getComputedStyle(el).backgroundColor)
-      expect(after, await button.getAttribute("aria-label") ?? "").not.toBe(before)
+      expect(after, (await button.getAttribute("aria-label")) ?? "").not.toBe(before)
     }
   })
 })

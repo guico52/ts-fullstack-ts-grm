@@ -9,7 +9,13 @@
  * resource that outgrows it wants a searchable picker, not a bigger limit.
  */
 import { api } from "./api"
-import { RESOURCES, type FieldOption, type ResourceKey, type ResourceRow, type ResourceSpec } from "./rbac"
+import {
+  RESOURCES,
+  type FieldOption,
+  type ResourceKey,
+  type ResourceRow,
+  type ResourceSpec,
+} from "./rbac"
 
 const OPTION_LIMIT = 100
 
@@ -46,7 +52,17 @@ async function listForOptions(key: ResourceKey): Promise<ResourceRow[]> {
 
 async function optionsOf(key: ResourceKey): Promise<FieldOption[]> {
   const rows = await listForOptions(key)
-  return rows.map((row) => ({ value: String(row.id), label: RESOURCES[key].label(row) }))
+  return rows.map((row) => ({
+    value: String(row.id),
+    label: RESOURCES[key].label(row),
+    // A tree picker needs the shape of the tree, not just the leaves.
+    ...(key === "views"
+      ? {
+          parentId: row.parentId == null ? null : String(row.parentId),
+          sort: Number(row.sort) || 0,
+        }
+      : {}),
+  }))
 }
 
 /** Options keyed by field, for every relational field the spec declares. */

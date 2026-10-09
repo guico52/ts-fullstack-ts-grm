@@ -93,15 +93,15 @@ Full text with reasoning and examples: [`docs/principles.md`](./docs/principles.
 
 ## Where to look
 
-| Need                                 | File                                                                        |
-| ------------------------------------ | --------------------------------------------------------------------------- |
-| A page, with a table and CRUD        | `src/views/OrganizationsView.vue` |
-| A form                               | `src/components/rbac/ResourceFormDialog.vue` |
-| A table + pagination                 | `src/components/data/DataPagination.vue`                                    |
-| A sidebar entry or collapsible group | `src/lib/nav.ts`, `src/components/layout/SidebarMenuGroup.vue`              |
-| Pure rules + tests                   | `src/lib/rbac.ts`, `src/lib/pagination.ts` |
-| The visual system                    | `src/assets/main.css`                                                       |
-| How the rules are enforced           | `src/lib/design-system.test.ts`                                             |
+| Need                                 | File                                                           |
+| ------------------------------------ | -------------------------------------------------------------- |
+| A page, with a table and CRUD        | `src/views/system/OrganizationsView.vue`                       |
+| A form                               | `src/components/rbac/ResourceFormDialog.vue`                   |
+| A table + pagination                 | `src/components/data/DataPagination.vue`                       |
+| A sidebar entry or collapsible group | `src/lib/nav.ts`, `src/components/layout/SidebarMenuGroup.vue` |
+| Pure rules + tests                   | `src/lib/rbac.ts`, `src/lib/pagination.ts`                     |
+| The visual system                    | `src/assets/main.css`                                          |
+| How the rules are enforced           | `src/lib/design-system.test.ts`                                |
 
 ## Adding a page, in four steps
 

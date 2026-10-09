@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
 
+import IconPicker from "@/components/rbac/IconPicker.vue"
 import { Button } from "@/components/ui/button"
+import { Combobox } from "@/components/ui/combobox"
+import { MultiSelect } from "@/components/ui/multi-select"
+import { TreeSelect } from "@/components/ui/tree-select"
 import {
   Dialog,
   DialogContent,
@@ -10,16 +14,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch"
 import { describeApiError } from "@/lib/api"
+import type { DialogSize } from "@/lib/dialog-sizes"
+import { VIEW_COMPONENTS } from "@/lib/views-catalog"
 import {
   toRequestBody,
   validateResource,
   type FieldOption,
   type ResourceField,
+  type ResourceRow,
   type ResourceSpec,
 } from "@/lib/rbac"
 
@@ -38,6 +52,19 @@ const props = defineProps<{
   record: Record<string, unknown> | null
   /** Candidates for relational fields, keyed by field. */
   options?: Record<string, FieldOption[]>
+  /**
+   * The rows the page is showing. A field's `auto` rule may need them — a
+   * view's order is a position among siblings, which only the list knows.
+   */
+  rows?: readonly ResourceRow[]
+  /**
+   * Values to open a **new** record with, overriding the blanks.
+   *
+   * Used by "add a page under this menu": the parent, the kind and the order
+   * are already decided by where the button was, so the form opens with them
+   * filled rather than asking again.
+   */
+  seed?: Record<string, unknown> | null
   save: (body: Record<string, unknown>, id: string | null) => Promise<void>
 }>()
 
@@ -56,6 +83,43 @@ const submitted = ref(false)
 const mode = computed<"create" | "update">(() => (props.record === null ? "create" : "update"))
 const editingId = computed(() => (props.record === null ? null : String(props.record.id)))
 
+/**
+ * Fields grouped by `legend`, in declaration order.
+ *
+ * A field **with** a legend starts a new section; a field without one joins
+ * whatever section is open. That is what lets a section hold several fields
+ * while only its first carries a heading.
+ */
+const groups = computed(() => {
+  const out: Array<{ legend?: string; fields: ResourceField[] }> = []
+  for (const field of props.spec.fields) {
+    // A field the current kind of record has no use for is not shown at all —
+    // not shown and disabled, which would leave a dead control on screen.
+    if (field.visibleWhen && !field.visibleWhen(values.value)) continue
+    if (field.legend !== undefined) {
+      out.push({ legend: field.legend, fields: [field] })
+      continue
+    }
+    const open = out[out.length - 1]
+    if (open) open.fields.push(field)
+    else out.push({ legend: undefined, fields: [field] })
+  }
+  return out
+})
+
+/**
+ * A dialog with paired fields has to be wider, or the pairing backfires:
+ * two half-width inputs in a 512px dialog come out at 221px each, narrower
+ * than the single full-width input they replaced.
+ */
+const dialogSize = computed<DialogSize>(() => {
+  if (props.spec.width) return props.spec.width
+  return props.spec.fields.some((field) => field.span === 1) ? "xl" : "md"
+})
+
+/** Fields the user has typed into; their `auto` rule stops applying. */
+const touched = ref<Set<string>>(new Set())
+
 function blankValues(spec: ResourceSpec): Record<string, unknown> {
   const draft: Record<string, unknown> = {}
   for (const field of spec.fields) {
@@ -72,10 +136,15 @@ watch(
   () => props.open,
   (open) => {
     if (!open) return
-    values.value = props.record === null ? blankValues(props.spec) : props.spec.toForm(props.record)
+    values.value =
+      props.record === null
+        ? { ...blankValues(props.spec), ...(props.seed ?? {}) }
+        : props.spec.toForm(props.record)
     errors.value = {}
     submitError.value = null
     submitted.value = false
+    touched.value = new Set()
+    applyAuto()
   },
 )
 
@@ -83,13 +152,39 @@ watch(
   values,
   () => {
     if (submitted.value) errors.value = validateResource(props.spec, values.value, mode.value)
+    applyAuto()
   },
   { deep: true },
 )
 
+/**
+ * Fill in every `auto` field that the user has not typed into.
+ *
+ * Converges: the rule is a pure function of the current values, so writing
+ * its result changes nothing on the next pass and the watch settles.
+ */
+function applyAuto(): void {
+  for (const field of props.spec.fields) {
+    if (!field.auto || touched.value.has(field.key)) continue
+    const next = field.auto(values.value, props.rows ?? [])
+    if (next !== values.value[field.key]) values.value[field.key] = next
+  }
+}
+
+/** The view catalogue as picker options: the file on the left, its route on the right. */
+const COMPONENT_OPTIONS = VIEW_COMPONENTS.map((component) => ({
+  value: component.path,
+  label: component.path,
+  hint: component.route,
+}))
+
 function choices(field: ResourceField): FieldOption[] {
-  if (field.options) return [...field.options]
-  return props.options?.[field.key] ?? []
+  const base: readonly FieldOption[] = field.options ?? props.options?.[field.key] ?? []
+  // The resource may narrow a picker to what the current draft allows — a
+  // page's parent must be a menu, a button's must be a page.
+  return props.spec.narrowOptions
+    ? [...props.spec.narrowOptions(field, base, values.value)]
+    : [...base]
 }
 
 function selectedIds(field: ResourceField): string[] {
@@ -97,11 +192,21 @@ function selectedIds(field: ResourceField): string[] {
   return Array.isArray(value) ? value.map(String) : []
 }
 
-function toggleLink(field: ResourceField, id: string, checked: boolean): void {
-  const next = new Set(selectedIds(field))
-  if (checked) next.add(id)
-  else next.delete(id)
-  values.value[field.key] = [...next]
+/**
+ * Write a value, plus whatever else it implies.
+ *
+ * Picking a component fills three columns at once: the file becomes
+ * `componentPath`, its name becomes `componentName`, and its kebab-case form
+ * becomes the route. One click instead of three typed strings that can
+ * disagree with each other.
+ */
+function setField(field: ResourceField, value: unknown): void {
+  // Typing into a field takes it out of automatic control.
+  touched.value.add(field.key)
+  values.value[field.key] = value
+  if (typeof value === "string" && field.derive) {
+    Object.assign(values.value, field.derive(value))
+  }
 }
 
 async function submit(): Promise<void> {
@@ -125,7 +230,7 @@ async function submit(): Promise<void> {
 
 <template>
   <Dialog :open="open" @update:open="(value: boolean) => emit('update:open', value)">
-    <DialogContent class="sm:max-w-lg" draggable>
+    <DialogContent :size="dialogSize" draggable>
       <!-- The footer lives inside the form so Enter submits and the confirm
            button can be type="submit", per the form conventions. -->
       <form class="space-y-5" @submit.prevent="submit">
@@ -136,88 +241,105 @@ async function submit(): Promise<void> {
           <DialogDescription>{{ spec.subtitle }}</DialogDescription>
         </DialogHeader>
 
-        <FieldGroup class="gap-5">
-          <Field
-            v-for="field in spec.fields"
-            :key="field.key"
-            :data-invalid="Boolean(errors[field.key])"
-          >
-            <FieldLabel :for="`field-${field.key}`">{{ field.label }}</FieldLabel>
+        <div class="space-y-6">
+          <FieldSet v-for="(group, index) in groups" :key="group.legend ?? index">
+            <FieldLegend v-if="group.legend">{{ group.legend }}</FieldLegend>
 
-            <Input
-              v-if="field.kind === 'text' || field.kind === 'email' || field.kind === 'number'"
-              :id="`field-${field.key}`"
-              :type="field.kind === 'number' ? 'number' : field.kind === 'email' ? 'email' : 'text'"
-              :model-value="String(values[field.key] ?? '')"
-              :placeholder="field.placeholder"
-              :aria-invalid="Boolean(errors[field.key])"
-              @update:model-value="(value: string | number) => (values[field.key] = value)"
-            />
-
-            <div v-else-if="field.kind === 'boolean'" class="flex items-center gap-3">
-              <Switch
-                :id="`field-${field.key}`"
-                :model-value="values[field.key] === true"
-                @update:model-value="(value: boolean) => (values[field.key] = value)"
-              />
-              <span class="text-sm text-muted-foreground">
-                {{ values[field.key] === true ? "启用" : "停用" }}
-              </span>
-            </div>
-
-            <NativeSelect
-              v-else-if="field.kind === 'select'"
-              :id="`field-${field.key}`"
-              :model-value="String(values[field.key] ?? '')"
-              :aria-invalid="Boolean(errors[field.key])"
-              @update:model-value="values[field.key] = $event"
-            >
-              <!-- An empty option is a real choice here: no parent view, or
-                   "pick one" before the field is filled in. -->
-              <NativeSelectOption value="">
-                {{ field.required ? "请选择…" : "（留空）" }}
-              </NativeSelectOption>
-              <NativeSelectOption
-                v-for="option in choices(field)"
-                :key="option.value"
-                :value="option.value"
+            <!-- Two columns on a wide dialog: a short field like 排序 should
+                 not take a full row from a long one like 名称. `span: 1`
+                 opts into half width; everything else spans the row. -->
+            <FieldGroup class="grid gap-5 sm:grid-cols-2">
+              <Field
+                v-for="field in group.fields"
+                :key="field.key"
+                :data-invalid="Boolean(errors[field.key])"
+                :class="field.span === 1 ? undefined : 'sm:col-span-2'"
               >
-                {{ option.label }}
-              </NativeSelectOption>
-            </NativeSelect>
+                <FieldLabel :for="`field-${field.key}`">{{ field.label }}</FieldLabel>
 
-            <div
-              v-else-if="field.kind === 'links'"
-              class="max-h-48 space-y-2 overflow-auto rounded-md border border-input p-3"
-            >
-              <label
-                v-for="option in choices(field)"
-                :key="option.value"
-                class="flex items-center gap-2 text-sm"
-              >
-                <input
-                  type="checkbox"
-                  class="size-4 accent-primary"
-                  :checked="selectedIds(field).includes(option.value)"
-                  @change="
-                    toggleLink(
-                      field,
-                      option.value,
-                      ($event.target as HTMLInputElement).checked,
-                    )
+                <Input
+                  v-if="field.kind === 'text' || field.kind === 'email' || field.kind === 'number'"
+                  :id="`field-${field.key}`"
+                  :type="
+                    field.kind === 'number' ? 'number' : field.kind === 'email' ? 'email' : 'text'
                   "
+                  :model-value="String(values[field.key] ?? '')"
+                  :placeholder="field.placeholder"
+                  :aria-invalid="Boolean(errors[field.key])"
+                  @update:model-value="(value: string | number) => setField(field, value)"
                 />
-                <span>{{ option.label }}</span>
-              </label>
-              <p v-if="choices(field).length === 0" class="text-sm text-muted-foreground">
-                暂无可选项。
-              </p>
-            </div>
 
-            <FieldDescription v-if="field.hint">{{ field.hint }}</FieldDescription>
-            <FieldError v-if="errors[field.key]">{{ errors[field.key] }}</FieldError>
-          </Field>
-        </FieldGroup>
+                <IconPicker
+                  v-else-if="field.kind === 'icon'"
+                  :id="`field-${field.key}`"
+                  :model-value="String(values[field.key] ?? '')"
+                  @update:model-value="(value: string) => setField(field, value)"
+                />
+
+                <Combobox
+                  v-else-if="field.kind === 'component'"
+                  :id="`field-${field.key}`"
+                  :model-value="String(values[field.key] ?? '')"
+                  :options="COMPONENT_OPTIONS"
+                  :invalid="Boolean(errors[field.key])"
+                  placeholder="选择组件…"
+                  search-placeholder="搜索组件，例如 users…"
+                  empty-text="没有匹配的组件。"
+                  @update:model-value="(value: string) => setField(field, value)"
+                />
+
+                <div v-else-if="field.kind === 'boolean'" class="flex items-center gap-3">
+                  <Switch
+                    :id="`field-${field.key}`"
+                    :model-value="values[field.key] === true"
+                    @update:model-value="(value: boolean) => (values[field.key] = value)"
+                  />
+                  <span class="text-sm text-muted-foreground">
+                    {{ values[field.key] === true ? "启用" : "停用" }}
+                  </span>
+                </div>
+
+                <Combobox
+                  v-else-if="field.kind === 'select'"
+                  :id="`field-${field.key}`"
+                  :model-value="String(values[field.key] ?? '')"
+                  :options="choices(field)"
+                  :invalid="Boolean(errors[field.key])"
+                  :clearable="field.clearable ?? !field.required"
+                  :placeholder="field.required ? '请选择…' : '（留空）'"
+                  @update:model-value="(value: string) => setField(field, value)"
+                />
+
+                <!-- One control per shape of data: a role's users are a flat set,
+                 its permissions too, but its views are a tree. -->
+                <TreeSelect
+                  v-else-if="field.kind === 'links' && field.picker === 'tree'"
+                  :id="`field-${field.key}`"
+                  :model-value="selectedIds(field)"
+                  :options="choices(field)"
+                  :invalid="Boolean(errors[field.key])"
+                  :placeholder="`选择${field.label}…`"
+                  :search-placeholder="`搜索${field.label}…`"
+                  @update:model-value="(value: string[]) => setField(field, value)"
+                />
+
+                <MultiSelect
+                  v-else-if="field.kind === 'links'"
+                  :id="`field-${field.key}`"
+                  :model-value="selectedIds(field)"
+                  :options="choices(field)"
+                  :invalid="Boolean(errors[field.key])"
+                  :placeholder="`选择${field.label}…`"
+                  :search-placeholder="`搜索${field.label}…`"
+                  @update:model-value="(value: string[]) => setField(field, value)"
+                />
+
+                <FieldDescription v-if="field.hint">{{ field.hint }}</FieldDescription>
+                <FieldError v-if="errors[field.key]">{{ errors[field.key] }}</FieldError>
+              </Field>
+            </FieldGroup>
+          </FieldSet>
+        </div>
 
         <p v-if="submitError" role="alert" class="text-sm text-destructive">{{ submitError }}</p>
 

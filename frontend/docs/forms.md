@@ -159,6 +159,87 @@ primary action keeps the position the hand already knows.
 - **One dialog for create and edit.** Two components duplicate every field
   and drift the first time a field is added. `null` means create.
 
+### Organising a long dialog form
+
+A nine-field form is nine rows tall in one column, which is how a dialog ends
+up taller than the screen. `ResourceFormDialog` renders its fields from the
+resource spec, and the spec carries the layout:
+
+| Field property | Effect                                                                 |
+| -------------- | ---------------------------------------------------------------------- |
+| `legend`       | starts a section; following fields without one join it                 |
+| `span: 1`      | half width on a wide dialog, so two short fields share a row           |
+| `hint`         | one line under the control saying _why_ the field exists               |
+| `clearable`    | the picker offers a row that empties a non-required field              |
+| `visibleWhen`  | hides the field when the record's kind makes it meaningless            |
+| `requiredWhen` | required only for some kinds — a button needs a parent, a page may not |
+| `auto`         | a value the dialog derives from the others, until you type one         |
+| `picker`       | how a multi-value field is chosen: a flat `MultiSelect`, or the tree   |
+
+```ts
+{ key: "type", label: "类型", kind: "select", span: 1,
+  legend: "基本信息", options: VIEW_TYPES, hint: "菜单用于分组，页面承载组件。" },
+{ key: "sort", label: "排序", kind: "number", span: 1, hint: "同一层级内由小到大。" },
+{ key: "componentPath", kind: "component", legend: "组件与路由",
+  required: true, visibleWhen: (v) => v.type === "VIEW", derive: /* … */ },
+```
+
+The view form reads as three sections — 基本信息, 组件与路由, 显示与层级 —
+with 类型/排序, 组件/组件名 and 上级视图/启用 paired. The order is deliberate:
+the things a developer decides first (kind, order, which component) sit above
+the cosmetic ones (icon). Adding a section, or pairing two fields, is a spec
+edit and never a `.vue` edit.
+
+**A hidden field is not a disabled one.** `visibleWhen` removes it from the
+layout, skips its required rule, and sends `null` for it on update — so a
+view switched from 页面 to 菜单 cannot keep a route it no longer renders.
+That is why `path` / `componentPath` / `componentName` are nullable in the
+database: a 菜单 is a grouping node and a 按钮 is a permission point, and
+neither is reached by a route.
+
+**Two more hooks make the view tree expressible in the spec.**
+`narrowOptions` (a `ResourceSpec` member) narrows a picker to what the
+current draft allows — a page's parent may only be a menu, a button's only a
+page — so the invalid pairing cannot be picked. And the hierarchy itself is
+enforced by the backend, which answers `422 INVALID_HIERARCHY`; a picker that
+only offers legal choices is a convenience, not the guarantee.
+
+**`auto` fills a field from the others until you touch it.** A view's `sort`
+is a position among its siblings, so it depends on the parent — which is
+itself a field. The dialog recomputes it whenever the draft changes, and
+stops the moment the user types into it, so changing the level never
+overwrites a value someone chose. The backend computes the same number
+inside the insert transaction, so a caller that skips the form (or two forms
+at once) still lands at the end of the level rather than at 0.
+
+**Enumerated and reference fields are dropdowns, not text inputs.** `kind:
+"select"` and `kind: "component"` render the `Combobox` from
+`components/ui/combobox/` — a trigger plus a searchable popover. The old
+`NativeSelect` was a `<select>` wearing the input's classes: it opened the OS
+menu, could not be searched, and had nowhere to put an option's hint. It
+stays only for registry components that use it internally (`Calendar`).
+
+**A relation with several values is a `MultiSelect`, and one whose ids form a
+tree is a `TreeSelect`.** Both are `kind: "links"`, told apart by
+`picker: "multi"` (the default) and `picker: "tree"`. The role form needs
+both: a role grants _pages_, which only mean something under their menu, and
+_permissions_, which are a flat set. The form picks the shape from the spec, so
+the two controls never have to be chosen between by hand — see
+[`components.md`](./components.md#the-three-pickers). Everything the picker
+offers is a convenience; the write is still a whole-set replacement
+documented by the field's `hint`.
+
+**Width follows the layout.** A dialog whose fields pair up opens at `xl`
+(768px) instead of `md` (512px) — pairing is a trap otherwise, because two
+half-width inputs in 512px come out at 221px each, narrower than the single
+full-width input they replaced. Sizes live in `src/lib/dialog-sizes.ts`; a
+spec can override with `width`, and a single-column form still gets `md`.
+
+This also matters for reachability, not just tidiness: a dialog that
+overflows the viewport has its **top** fields pushed off-screen (it is
+centred), and `DialogContent` caps height and scrolls for exactly that
+reason.
+
 ---
 
 ## A dialog around an async write

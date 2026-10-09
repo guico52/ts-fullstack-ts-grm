@@ -18,31 +18,31 @@ export const routes = [
   {
     path: "/system/organizations",
     name: "system-organizations",
-    component: () => import("@/views/OrganizationsView.vue"),
+    component: () => import("@/views/system/OrganizationsView.vue"),
     meta: { title: "组织" },
   },
   {
     path: "/system/users",
     name: "system-users",
-    component: () => import("@/views/UsersView.vue"),
+    component: () => import("@/views/system/UsersView.vue"),
     meta: { title: "用户" },
   },
   {
     path: "/system/views",
     name: "system-views",
-    component: () => import("@/views/ViewsView.vue"),
+    component: () => import("@/views/system/ViewsView.vue"),
     meta: { title: "视图" },
   },
   {
     path: "/system/roles",
     name: "system-roles",
-    component: () => import("@/views/RolesView.vue"),
+    component: () => import("@/views/system/RolesView.vue"),
     meta: { title: "角色" },
   },
   {
     path: "/system/permissions",
     name: "system-permissions",
-    component: () => import("@/views/PermissionsView.vue"),
+    component: () => import("@/views/system/PermissionsView.vue"),
     meta: { title: "权限" },
   },
   {

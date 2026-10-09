@@ -16,6 +16,7 @@ bunx shadcn-vue@latest add <name> --yes --overwrite
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Layout   | `Card` (+ Header/Title/Description/Content/Footer/Action), `Separator`, `Sheet`, `Dialog`                                                |
 | Forms    | `Field` (+ Group/Label/Description/Error/Separator/Legend), `Input`, `Textarea`, `Label`, `Select`, `Switch`, `Checkbox`, `NativeSelect` |
+| Pickers  | `Combobox` (one id, searchable), `MultiSelect` (many ids), `TreeSelect` (many ids, shown as a tree)                                      |
 | Actions  | `Button`, `DropdownMenu` (+ Item/Radio/Checkbox/Separator), `ToggleGroup`                                                                |
 | Feedback | `Alert`, `AlertDialog`, `Skeleton`, `Badge`, `Tooltip`                                                                                   |
 | Data     | `Table` (+ Header/Body/Row/Head/Cell/Caption/Footer), `Calendar`, `Popover`                                                              |
@@ -26,9 +27,85 @@ Project-level building blocks:
 - `src/components/layout/` — `PageHeader`, `SectionHeader`, `AppSidebar`,
   `SidebarNav`, `SidebarNavItem`, `AppTopbar`, `ThemeToggle`, `AccentToggle`
 - `src/components/data/` — `StatCard`, `DataPagination`
-- `src/components/rbac/` — `ResourceFormDialog`: the single create/edit dialog
-  all five RBAC pages share, with its fields driven by the resource metadata
-  in `src/lib/rbac.ts`
+- `src/components/rbac/` — the RBAC page kit: `ResourceFormDialog` (one
+  create/edit dialog all five resources share, fields driven by
+  `src/lib/rbac.ts`), `ViewTreeTable` (the view hierarchy, collapsible), and
+  `IconPicker`, which trades a free-text icon field for a grid of the
+  catalogue.
+
+  The view tree is a table, not a list: a page belongs to a menu and a button
+  to a page, and a flat table cannot show that. `ViewTreeTable` renders the
+  depth as indentation and gives an expander only to rows that have children —
+  a leaf with a toggle that does nothing is worse than no toggle. Because a
+  tree has no page number to jump to, the page fetches the whole tree and
+  renders **no** `DataPagination`; every other resource is a flat list and
+  keeps one.
+
+  The hierarchy itself is enforced by the backend (`422 INVALID_HIERARCHY`);
+  the form only narrows the parent picker so the invalid pairing cannot be
+  expressed in the first place.
+
+  Each row also carries the ⊕ its level allows — 添加页面 on a menu, 添加按钮
+  on a page, nothing on a button — and clicking one opens the create form with
+  the parent, the kind and the next order **already filled**. Those three were
+  answered by which row the button sat on; asking again would be asking the
+  user to repeat themselves. The two levels get different glyphs on purpose:
+  two identical ⊕ in one column would be a guess.
+
+  **Colour says which level you are looking at.** The row's icon carries it —
+  主色 for a menu, `chart-1` for a page, muted for a button — and so does the
+  kind badge, so a glance down the column is enough to read the structure.
+  Only the icon and the label are coloured: hovering a row paints its
+  background and **nothing else**, because an icon that brightens on hover
+  reads as a control, and these icons are not clickable.
+
+  The tones live in `src/lib/rbac.ts` as token-built class lists
+  (`bg-chart-1/10 text-chart-1`), never a literal colour — the tokens already
+  carry a light and a dark value. Only `chart-1`, `chart-4` and `chart-5` are
+  used for text: the other two are series fills and fall under 3:1 on a light
+  card.
+
+  **Row actions carry their own colour too**: 添加 is `chart-4`, 编辑 is
+  `chart-1`, 删除 is `destructive`. The colour is on the icon at rest, not
+  painted by hover — hovering only adds a tinted background. A destructive
+  action that is grey until you point at it hides its one important property
+  until after the moment you needed it.
+
+  The two dropdown fields of the view form are written more than they are
+  chosen, and they write more than their own column:
+
+  | Field           | Control                          | What it writes                                              |
+  | --------------- | -------------------------------- | ----------------------------------------------------------- |
+  | `icon`          | `IconPicker` (grid)              | just `icon`                                                 |
+  | `componentPath` | `Combobox` of the file catalogue | also `componentName` and `path`, derived from the file name |
+
+  The derivation is declared on the field (`derive`) and applied by the
+  dialog, so adding a "pick a thing, fill three columns" field needs no
+  component changes.
+
+- `src/components/ui/combobox/` — the dropdown for enumerated and reference
+  fields: a trigger that looks like a control, plus a searchable popover whose
+  options can carry an icon and a secondary line. Preferred over
+  `native-select` (which is only still here because `Calendar` uses it).
+
+- `src/lib/dialog-sizes.ts` — named dialog widths, so a width is chosen at
+  the call site instead of by scattering `sm:max-w-*` overrides.
+
+- `src/config/icons.ts` — the icon catalogue. A **curated** list, not
+  `import * as icons`: a namespace import defeats tree-shaking and ships the
+  whole library for a picker that shows a few dozen. Adding an icon is one
+  import and one entry; swapping icon libraries means rewriting this file
+  only, because nothing else names the package.
+
+- `src/lib/views-catalog.ts` — every view on disk, via `import.meta.glob`.
+  Generated at build time, so the list cannot drift from the files. Doubles
+  as the source of `componentName` (the file name) and the route (its
+  kebab-case form).
+
+- `src/lib/view-tree.ts` — flat rows ↔ displayable tree: group by parent,
+  order siblings, and flatten to the rows currently visible with the depth to
+  indent them. Pure functions, so the awkward cases (a parent missing from a
+  filtered page, a cycle) are tested without a browser.
 
 ---
 
@@ -44,9 +121,43 @@ control for the data.
 | A binary toggle applied instantly | `Switch` with an optimistic update | `Switch` plus a Save button                                   |
 | 2–3 mutually exclusive modes      | `ToggleGroup`                      | `Select` (a menu for two options is a click tax)              |
 | Free text, value unknown          | `Input`                            | `Select` with an "other" option                               |
+| A foreign key you can search      | `Combobox`                         | `Select` (a menu that cannot be searched stops scaling)       |
+| Several foreign keys at once      | `MultiSelect`                      | A stack of checkboxes (its height grows with the table)       |
+| Ids whose depth carries meaning   | `TreeSelect`                       | `MultiSelect` (a flattened tree reads as peers)               |
 | A date                            | `DatePickerField`                  | `<input type="date">` (unstyleable, inconsistent per browser) |
 | A destructive confirmation        | `AlertDialog`                      | `Dialog` (an alert dialog cannot be dismissed by accident)    |
 | A long form                       | `Dialog` with `sm:max-w-lg`        | A full-width dialog                                           |
+
+---
+
+## The three pickers
+
+The three pickers share a trigger, a search box and an option row on purpose:
+they are one control answering three kinds of question, and learning one should
+be learning all three. They live in `src/components/ui/combobox/`,
+`src/components/ui/multi-select/` and `src/components/ui/tree-select/`.
+
+**`MultiSelect` is not a `multiple` flag on `Combobox`.** Those two differ in
+exactly two behaviours — the value is a list, and picking one does not close the
+popover — but a flag would turn every prop and every emit site into a union type
+(`string | string[]`) for no gain, and the branches inside would have to be
+re-read every time either mood changed. Two components of thirty lines each are
+cheaper than one of sixty with a fork in the middle.
+
+**`TreeSelect` differs from `MultiSelect` in what it shows, not what it emits** —
+both are `string[]`. Its options carry `parentId` and `sort`, and it renders
+depth as indentation, so a page under its menu does not read as a sibling. Two
+details matter more than they look:
+
+- **Searching keeps the hierarchy.** A hit is shown together with its ancestors
+  rather than as an orphan row, because the path down to a match is exactly what
+  a flat result list throws away.
+- **Only branches get an expander.** A leaf with a toggle that does nothing is
+  worse than no toggle. The arrow sits inside the row: clicking it collapses the
+  branch, clicking the row selects.
+
+Both multi-selects show the chosen items as chips rather than a count — the
+question the field answers is _which_ ones, and a number cannot answer it.
 
 ---
 

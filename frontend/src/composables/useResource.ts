@@ -17,11 +17,19 @@ export interface ResourceSource<T> {
   remove: (id: string) => Promise<void>
 }
 
-export function useResource<T>(source: ResourceSource<T>) {
+export interface ResourceOptions {
+  /**
+   * Rows per request. A tree wants everything in one go — it has no page to
+   * navigate to — so it asks for more and renders no paginator.
+   */
+  pageSize?: PageSize
+}
+
+export function useResource<T>(source: ResourceSource<T>, options: ResourceOptions = {}) {
   const rows = ref([]) as Ref<T[]>
   const total = ref(0)
   const page = ref(1)
-  const pageSize = ref<PageSize>(DEFAULT_PAGE_SIZE)
+  const pageSize = ref<PageSize>(options.pageSize ?? DEFAULT_PAGE_SIZE)
   const loading = ref(false)
   /** Failures that have nowhere better to go — loading the list, deleting a row. */
   const error = ref<string | null>(null)

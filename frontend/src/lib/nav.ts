@@ -1,5 +1,13 @@
 import { markRaw, type Component } from "vue"
-import { Building2, KeyRound, LayoutDashboard, LayoutList, Shield, ShieldCheck, Users } from "@lucide/vue"
+import {
+  Building2,
+  KeyRound,
+  LayoutDashboard,
+  LayoutList,
+  Shield,
+  ShieldCheck,
+  Users,
+} from "@lucide/vue"
 
 /**
  * The navigation tree.

@@ -26,10 +26,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useResource } from "@/composables/useResource"
-import { api, describeApiError } from "@/lib/api"
-import { USERS, columnClass, type FieldOption, type ResourceRow } from "@/lib/rbac"
-import { loadFieldOptions } from "@/lib/rbac-options"
+import { useResource } from "@/composables/useResource.ts"
+import { api, describeApiError } from "@/lib/api.ts"
+import { USERS, columnClass, type FieldOption, type ResourceRow } from "@/lib/rbac.ts"
+import { loadFieldOptions } from "@/lib/rbac-options.ts"
 
 const spec = USERS
 
@@ -174,6 +174,7 @@ async function confirmDelete() {
                       <Button
                         variant="ghost"
                         size="icon-sm"
+                        class="text-chart-1 hover:bg-chart-1/12 hover:text-chart-1"
                         :aria-label="`编辑 ${spec.label(row)}`"
                         @click="openEdit(row)"
                       >
@@ -188,7 +189,7 @@ async function confirmDelete() {
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        class="hover:bg-destructive/10 hover:text-destructive"
+                        class="text-destructive hover:bg-destructive/10 hover:text-destructive"
                         :disabled="pendingRemoveId === String(row.id)"
                         :aria-label="`删除 ${spec.label(row)}`"
                         @click="pendingDelete = row"
@@ -210,7 +211,7 @@ async function confirmDelete() {
 
         <div v-if="rows.length === 0" class="px-6 py-12 text-center">
           <p class="text-sm text-muted-foreground">
-            {{ loading ? "加载中…" : loadError ?? `还没有${spec.singular}。` }}
+            {{ loading ? "加载中…" : (loadError ?? `还没有${spec.singular}。`) }}
           </p>
           <div v-if="!loading" class="mt-4 flex justify-center">
             <Button @click="openCreate">

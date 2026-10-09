@@ -141,5 +141,14 @@ export function useDraggableDialog(enabled: () => boolean): DraggableDialog {
   onMounted(() => window.addEventListener("resize", onWindowResize))
   onBeforeUnmount(() => window.removeEventListener("resize", onWindowResize))
 
-  return { dragging, style, handlers: { pointerdown: onPointerDown, pointermove: onPointerMove, pointerup: onPointerUp, pointercancel: onPointerUp } }
+  return {
+    dragging,
+    style,
+    handlers: {
+      pointerdown: onPointerDown,
+      pointermove: onPointerMove,
+      pointerup: onPointerUp,
+      pointercancel: onPointerUp,
+    },
+  }
 }
