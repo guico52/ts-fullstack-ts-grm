@@ -287,11 +287,21 @@ is TEXT` —— **连 `eq` 都不行**，更不用说 `lower()` / `ilike()`。
   要按某一列查询或排序，就用 `prop.str(n)`。`SysUser.email` 与 `SysUser.name` 就是
   为此从 `text()` 改过来的。
 
-  **差别在 ts-grm 的类型标签，不在 PostgreSQL。** `ScalarType.TEXT` 的 kind 是 `"TEXT"`，
-  `ScalarType.str(n)` 是 `"STR"`（带 length）；而 `createTableProp()` 的 switch 只处理
-  `I8/I16/I32/I64/NUM/F32/F64/STR/DATETIME` —— **没有 `"TEXT"`**，所以抛错。而 PostgreSQL
-  方言把 STR 直接写成 `text`（n 不进 DDL，其他方言才用它生成 `varchar(n)`），
-  因此**改这一条不产生迁移**。
+  **这是上游的一个不一致，不是刻意的限制。** `prop.text()` 返回的就是 `__StrProp` ——
+  与 `prop.str(n)` **同一个类型**，所以 `.eq` / `.ilike` / `.lower()` 在类型上全都有，
+  TypeScript 不会拦；但它的 `scalarType.kind` 是 `"TEXT"`，而 `createTableProp()`
+  的 switch 只处理 `I8/I16/I32/I64/NUM/F32/F64/STR/DATETIME`。`ScalarType.TEXT` 在
+  整个 bundle 里只出现两次（定义，以及 `prop.text()` 里的那一次使用）——
+  **没有任何配套的表达式实现**。
+
+  在 PostgreSQL 上这纯粹是故障：两种 prop 生成的列**完全一样**（初始迁移里
+  `sys_user.name` 用 `text()`、book 迁移里 `book.name` 用 `str(50)`，两处都是 `text`），
+  所以一个明明可比较的列被 ORM 拒了。其他方言未必如此（Oracle 的 CLOB、SQL Server
+  已弃用的 `text` 都不能直接 `=`），但这种差别本该由**方言的列类型**表达，而不是由
+  一个方言无关的 kind 一刀切。
+
+  **绕法是 `prop.str(n)`** —— 它在 PG 下不进 DDL（其他方言才用它生成 `varchar(n)`），
+  因此改这一条不产生迁移。`SysUser.email` 与 `SysUser.name` 就是这么改的。
 
   > 可以自查，不必相信：把一个 `text` 列临时改成 `prop.i32()`，`tgm check` 会立刻报
   > 「列 X：类型应为 integer」—— 说明它**确实在比较列类型**。于是 `text()` → `str(n)`
