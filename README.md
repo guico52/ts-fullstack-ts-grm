@@ -19,6 +19,8 @@ docs/       实际项目的文档
   `save()` 是整实体 upsert，无法表达「只改传入字段」的 PATCH 与精确的关联替换。
   分工与理由见 [`backend/docs/constraints.md`](./backend/docs/constraints.md#4-持久层分工)。
 - 数据库**模型集中在 `backend/src/model/`**，由 `model/index.ts` 聚合、并导出 ts-grm 客户端。
+  当前两个领域：`rbac`（组织 / 用户 / 视图 / 角色 / 权限）与 `book`（图书 / 作者 / 书店，
+  刚好把多对一、一对多、多对多各演示一遍）。
 
 ## 文档在哪
 
@@ -60,6 +62,7 @@ bun run dev                 # 前后端一起启动，日志分别带 [backend] 
 #   后端 http://localhost:3000（接口文档 /docs）、前端 http://localhost:5173
 #   也可单独启动：bun run dev:backend / bun run dev:frontend
 ```
+
 后端连接池是**懒建立**的：进程启动时不会连库，首次访问数据库才连。数据库没起也能
 启动服务、通过 `/health` 探活，由 `/health/db` 如实报告 `503`。
 

@@ -19,16 +19,22 @@ src/
 ├── model/                     模型 + 数据库入口
 │   ├── index.ts               EntityManager.of、全局过滤器、连接池、client、事务
 │   ├── embedded.ts            公共嵌入字段（auditFields）
-│   └── rbac/index.ts          按领域分的模型文件
-├── modules/<领域>/<实体>/      业务模块
-│   ├── model.ts               校验 schema
-│   ├── repository.ts          读 ts-grm / 写原生 pg
-│   ├── service.ts             业务规则
-│   └── index.ts               Elysia controller
+│   ├── rbac/index.ts          按领域分的模型文件
+│   └── book/index.ts          一个领域一个文件
+├── modules/<领域>/            业务模块，一个领域一个目录
+│   ├── index.ts               域聚合：把该域的 controller 合成一个插件
+│   └── <实体>/
+│       ├── model.ts           校验 schema
+│       ├── repository.ts      读 ts-grm / 写原生 pg
+│       ├── service.ts         业务规则
+│       └── index.ts           Elysia controller
 ├── errors.ts                  领域错误 + SQLSTATE 分类
 ├── app.ts                     组装：插件 + 错误处理 + 挂模块
 └── index.ts                   进程入口
 ```
+
+当前两个领域：`rbac`（org / user / view / role / permission）与 `book`
+（book / author / store）。
 
 依赖方向单向前进，不允许反向或跨层：
 
@@ -52,22 +58,34 @@ index → service → repository → model/index（client、事务）
 ### `model/index.ts`
 
 ```ts
-// 扫描 rbac/ 目录注册模型；新增模型文件自动纳入
-export const entityManager = EntityManager.of(import.meta.dirname, "./rbac/index.ts");
-export const pool = new Pool({ /* process.env.PG_* */ });
+// 新领域要在这里显式列出。迁移工具按目录递归扫描 src/model/，但运行时
+// 只认这几条路径 —— 漏掉一个文件，表能建出来，查询却报「模型未注册」。
+export const entityManager = EntityManager.of(
+  import.meta.dirname,
+  "./rbac/index.ts",
+  "./book/index.ts",
+);
+export const pool = new Pool({/* process.env.PG_* */});
 
 // 全局过滤器（软删除）：传 entityManager，模型清单由它汇总；构造客户端之前必须注册完
 const filters = await createGlobalFilterManager(entityManager);
-filters.addGlobalFor<DateExpression<Date | null>>("deletedAt", (column) => column.isNull());
+filters.addGlobalFor<DateExpression<Date | null>>("deletedAt", (column) =>
+  column.isNull(),
+);
 
-export const client = newSqlClient(new PostgresDriver(pool), { entityManager, filterManager: filters });
-export function clientFor(session: PoolClient): SqlClient   // 事务内钉住会话
-export async function transaction<T>(fn)                     // BEGIN/COMMIT/ROLLBACK
-export async function run<T>(fn)                             // 错误分类包装
-export async function ready(): Promise<boolean>              // 业务表探针
+export const client = newSqlClient(new PostgresDriver(pool), {
+  entityManager,
+  filterManager: filters,
+});
+export function clientFor(session: PoolClient): SqlClient; // 事务内钉住会话
+export async function transaction<T>(fn); // BEGIN/COMMIT/ROLLBACK
+export async function run<T>(fn); // 错误分类包装
+export async function ready(): Promise<boolean>; // 业务表探针
 ```
 
 - 模型注册用 `EntityManager.of`：baseDir 必须是**目录**，模型路径必须是 `./` 开头的相对路径。
+  **`of` 是变长参数**，一个领域一条路径；迁移配置里的 `models: ["./src/model"]` 是目录扫描，
+  与这里不是一回事，两边都要照顾到。
 - repository 直接 `import { client, clientFor, run, transaction } from "../../../model/index.ts"`，
   不再往业务层传数据库句柄。
 
@@ -78,8 +96,10 @@ export async function ready(): Promise<boolean>              // 业务表探针
 
 ```ts
 // model/index.ts
-const filters = await createGlobalFilterManager(entityManager);   // ts-grm-patches ≥0.2.1
-filters.addGlobalFor<DateExpression<Date | null>>("deletedAt", (column) => column.isNull());
+const filters = await createGlobalFilterManager(entityManager); // ts-grm-patches ≥0.2.1
+filters.addGlobalFor<DateExpression<Date | null>>("deletedAt", (column) =>
+  column.isNull(),
+);
 ```
 
 - 传 `entityManager` 即可，**不必手写模型清单**（由它的 `entities()` 汇总）；也接受模型数组。
@@ -97,7 +117,10 @@ const query = client.createQuery(SysOrganization, (q, organization) => {
   q.orderBy(organization.id.asc());
   return q.select(organization.fetch(OrganizationView));
 });
-const [data, total] = await Promise.all([query.fetchRange({ limit, offset }), query.fetchCount()]);
+const [data, total] = await Promise.all([
+  query.fetchRange({ limit, offset }),
+  query.fetchCount(),
+]);
 ```
 
 - 投影用 `dto.view(Model, (c) => [...])` 声明，返回类型由它推导，**不要手工拼装行对象**。
@@ -115,7 +138,7 @@ transaction(async (session) => {
     "INSERT INTO sys_organization (name, code, logo) VALUES ($1, $2, $3) RETURNING id",
     [body.name, body.code, body.logo ?? null],
   );
-  return findOne(clientFor(session), String(inserted.rows[0].id));  // 读回完整视图
+  return findOne(clientFor(session), String(inserted.rows[0].id)); // 读回完整视图
 });
 ```
 
@@ -137,21 +160,42 @@ transaction(async (session) => {
 - `index.ts`：工厂函数返回 `new Elysia({ name, prefix })`；1 实例 = 1 controller；
   ❌ 不要把整个 `Context` 传进 service。
 
+### 域聚合（`modules/<领域>/index.ts`）
+
+实体各一个工厂，域里再有一个聚合工厂：
+
+```ts
+// modules/rbac/index.ts
+export function rbacModule() {
+  return new Elysia({ name: "rbac" })
+    .use(organizationModule())
+    .use(permissionModule());
+}
+```
+
+`app.ts` 因此只挂**域**，不挂实体：新增一个实体的 controller 不会动 `app.ts`。
+路由前缀是两段 —— `modules/book/book` 挂在 `/book/books`，`modules/book/store`
+挂在 `/book/stores`；文件名叫 `store` 而路由叫 `stores`，因为路由面对的是集合。
+
+**每个工厂都必须调用。** 少写一对括号不报错，但会把整棵路由树挂错地方 —— 见第 9 节。
+域内实体与域同名时（`book` 域里的 `book` 实体），导入时改名，别让两个 `bookModule`
+撞在一起。
+
 ## 6. 应用组装与错误处理
 
-- `app.ts` 只做：全局插件（CORS）、全局错误处理、挂载模块；业务逻辑一行不写。
+- `app.ts` 只做：全局插件（CORS）、全局错误处理、**挂载各域的聚合插件**；业务逻辑一行不写。
 - **`onError` 必须注册在 `.use(模块)` 之前**，否则插件路由里的异常会漏成框架默认响应。
 - 统一错误体：
 
-  | 状态 | 含义 | `code` |
-  | --- | --- | --- |
-  | 422 | 参数不合法 | `VALIDATION` |
-  | 404 | 接口或资源不存在 | `NOT_FOUND` |
-  | 409 | 唯一约束冲突 | `CONFLICT` |
-  | 422 | 外键引用无效 | `INVALID_REFERENCE` |
-  | 500 | 数据库凭据无效 | `DATABASE_AUTH_FAILED` |
-  | 503 | 数据库暂时不可用 | `DATABASE_UNAVAILABLE` |
-  | 500 | 未捕获异常 | 原始 `code` |
+  | 状态 | 含义             | `code`                 |
+  | ---- | ---------------- | ---------------------- |
+  | 422  | 参数不合法       | `VALIDATION`           |
+  | 404  | 接口或资源不存在 | `NOT_FOUND`            |
+  | 409  | 唯一约束冲突     | `CONFLICT`             |
+  | 422  | 外键引用无效     | `INVALID_REFERENCE`    |
+  | 500  | 数据库凭据无效   | `DATABASE_AUTH_FAILED` |
+  | 503  | 数据库暂时不可用 | `DATABASE_UNAVAILABLE` |
+  | 500  | 未捕获异常       | 原始 `code`            |
 
 - SQLSTATE → 领域错误的翻译**只在 `errors.ts`**；`app.ts` 只做领域错误 → HTTP 状态。
 - 凭据被拒（配置错误，500）与暂时连不上（可重试，503）必须分开，且都要打日志。
@@ -167,7 +211,9 @@ transaction(async (session) => {
 ```ts
 try {
   process.loadEnvFile?.(fileURLToPath(new URL("./.env", import.meta.url)));
-} catch { /* 没有 .env 时用默认值 */ }
+} catch {
+  /* 没有 .env 时用默认值 */
+}
 ```
 
 命令（`backend/` 内）：
@@ -190,9 +236,21 @@ bun run db:push            # 直接把库同步成模型形状（不写历史，
   `PG_INTEGRATION=1` 显式开启，并自行清理它写入的数据。
 - 集成测试**都放同一个文件**：`pool` 是全局单例，多个文件各自 `close()` 会把池
   提前关掉，后跑的用例就全崩。
+- 同一个文件里也要小心：**`close()` 整份文件只调一次**。两个 `describe` 各自 `close()`，
+  先跑完的那个会把池关掉，后一个 describe 的查询全部报
+  `Cannot use a pool after calling end`。各 `describe` 清自己的数据，关闭放在文件级的
+  一个 `afterAll` 里。
 
 ## 9. 上游已知限制（踩坑记录）
 
+- **`.use(工厂)` 与 `.use(工厂())` 不是一回事。** Elysia 见到函数就当 functional plugin，
+  拿**当前实例**去调它；而我们的工厂忽略入参、返回新实例 —— 返回的那个实例成了新的根，
+  **其后**所有 `.use()` 都嵌进了它的 prefix。实测得到一组
+  `/rbac/organizations/rbac/views/`，症状是后几个模块集体 404、第一个模块正常。
+  **一律写 `工厂()`。**
+- **多对多只在拥有中间表的一侧写 `joinTable`**，另一侧用 `.mappedBy("对方的字段名")`。
+  两侧各写一个 `joinTable` 不报错，但迁移工具会生成**两张中间表**：一张永远是空的，
+  而写入只落进其中一张。
 - **`EntityManager.combine`** 的类型是「恰好两个」参数（`AtLeastTwo = [T, T]`），运行时却遍历全部
   入参；改用 `EntityManager.of(dir, path)` 扫描目录注册模型，避免这个限制。
 - **`EntityManager.of`** 的 baseDir 必须是**已存在的目录**（否则抛 `ArgumentError`），

@@ -9,12 +9,9 @@ import {
   InvalidHierarchyError,
   ResourceNotFoundError,
 } from "./errors.ts";
-import { organizationModule } from "./modules/rbac/organization/index.ts";
-import { permissionModule } from "./modules/rbac/permission/index.ts";
-import { roleModule } from "./modules/rbac/role/index.ts";
-import { userModule } from "./modules/rbac/user/index.ts";
-import { viewModule } from "./modules/rbac/view/index.ts";
 import { ready } from "./model/index.ts";
+import { bookModule } from "./modules/book/index.ts";
+import { rbacModule } from "./modules/rbac/index.ts";
 
 // 配置直接取自环境变量（Bun 会自动加载 backend/.env）。
 const nodeEnv = process.env.NODE_ENV ?? "development";
@@ -93,11 +90,8 @@ export function createApp() {
       },
       detail: { summary: "业务表可读性探针", tags: ["health"] },
     })
-    .use(organizationModule())
-    .use(userModule())
-    .use(viewModule())
-    .use(roleModule())
-    .use(permissionModule());
+    .use(rbacModule())
+    .use(bookModule())
 
   if (enableDocs) {
     app.use(
@@ -112,6 +106,7 @@ export function createApp() {
           tags: [
             { name: "health", description: "健康检查" },
             { name: "rbac", description: "权限管理" },
+            { name: "book", description: "图书管理" },
           ],
         },
       }),

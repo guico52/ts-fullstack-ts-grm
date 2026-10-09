@@ -14,8 +14,15 @@ import { classifyDatabaseError } from "../errors.ts";
 /**
  * 模型注册表：`of` 会加载 `paths` 指向的模块，并枚举进程内全部已注册模型。
  * baseDir 必须是目录，路径必须是 `./` 或 `../` 开头的相对路径。
+ *
+ * **新领域要在这里显式列出。** 迁移工具按目录递归扫描 `src/model/`，但运行时
+ * 只认这几条路径 —— 漏掉一个文件，表能建出来，查询却报「模型未注册」。
  */
-export const entityManager = EntityManager.of(import.meta.dirname, "./rbac/index.ts");
+export const entityManager = EntityManager.of(
+  import.meta.dirname,
+  "./rbac/index.ts",
+  "./book/index.ts",
+);
 
 /** 全项目唯一的 pg 连接池。进程启动时不连接，首次查询才建连接。 */
 export const pool = new Pool({

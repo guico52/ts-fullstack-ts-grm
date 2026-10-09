@@ -14,22 +14,24 @@ const enabled = process.env.PG_INTEGRATION === "1";
 // 加时间戳，避免多次运行时相互冲突。
 const STAMP = Date.now();
 
-describe.skipIf(!enabled)("rbac（真实 pg）", () => {
-  const app = createApp();
+// 一个应用与一组请求助手：工厂设计使得多次 `createApp()` 也各自独立。
+const app = createApp();
 
-  function call(path: string, init?: RequestInit) {
-    return app.handle(new Request(`http://localhost${path}`, init));
-  }
-  function send(path: string, method: string, body: unknown) {
-    return call(path, {
-      method,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  }
-  function json<T>(response: Response): Promise<T> {
-    return response.json() as Promise<T>;
-  }
+function call(path: string, init?: RequestInit) {
+  return app.handle(new Request(`http://localhost${path}`, init));
+}
+function send(path: string, method: string, body: unknown) {
+  return call(path, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+function json<T>(response: Response): Promise<T> {
+  return response.json() as Promise<T>;
+}
+
+describe.skipIf(!enabled)("rbac（真实 pg）", () => {
   async function createOrganization(code: string) {
     return json<{ id: string; name: string; code: string; logo: string | null }>(
       await send("/rbac/organizations", "POST", { name: "IT-组织", code }),
@@ -52,7 +54,6 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
     await pool.query("DELETE FROM sys_view WHERE name LIKE 'IT-%' OR path LIKE '/it-%'");
     await pool.query("DELETE FROM sys_permission WHERE name LIKE 'IT-%'");
     await pool.query("DELETE FROM sys_organization WHERE code LIKE 'IT-%' OR code LIKE 'ORG-%'");
-    await close();
   });
 
   it("organization：创建 → 读回 → 局部更新 → 软删除 → 再查不到", async () => {
@@ -356,4 +357,110 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
     expect((await call(`/rbac/roles/${role.id}`, { method: "DELETE" })).status).toBe(200);
     expect((await call(`/rbac/roles/${role.id}`)).status).toBe(404);
   });
+});
+
+describe.skipIf(!enabled)("book（真实 pg）", () => {
+  afterAll(async () => {
+    // 按外键顺序硬删，避免给开发库留下测试残留。
+    await pool.query(
+      "DELETE FROM book_author_mapping WHERE book_id IN (SELECT id FROM book WHERE name LIKE 'IT-%')",
+    );
+    await pool.query("DELETE FROM book WHERE name LIKE 'IT-%'");
+    await pool.query("DELETE FROM author WHERE name LIKE 'IT-%'");
+    await pool.query("DELETE FROM book_store WHERE name LIKE 'IT-%'");
+  });
+
+  const createStore = (name: string) =>
+    send("/book/stores", "POST", { name: `IT-${name}-${STAMP}` });
+  const createAuthor = (name: string) =>
+    send("/book/authors", "POST", { name: `IT-${name}-${STAMP}` });
+
+  it("store：创建 → 改名 → 软删除 → 再查不到", async () => {
+    const created = await json<{ id: string; name: string }>(await createStore("书店"));
+    expect(created.name).toBe(`IT-书店-${STAMP}`);
+
+    const renamed = await json<{ name: string }>(
+      await send(`/book/stores/${created.id}`, "PATCH", { name: `IT-改名-${STAMP}` }),
+    );
+    expect(renamed.name).toBe(`IT-改名-${STAMP}`);
+
+    expect((await call(`/book/stores/${created.id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await call(`/book/stores/${created.id}`)).status).toBe(404);
+  });
+
+  it("book：创建即绑定作者，PATCH 只替换传入的那一类", async () => {
+    const store = await json<{ id: string }>(await createStore("书店2"));
+    const first = await json<{ id: string }>(await createAuthor("作者甲"));
+    const second = await json<{ id: string }>(await createAuthor("作者乙"));
+
+    const created = await send("/book/books", "POST", {
+      name: `IT-图书-${STAMP}`,
+      edition: 1,
+      price: 42.5,
+      storeId: store.id,
+      authorIds: [first.id, second.id],
+    });
+    expect(created.status).toBe(201);
+    const book = await json<{
+      id: string;
+      name: string;
+      price: number;
+      store: { id: string; name: string };
+      authors: Array<{ id: string; name: string }>;
+    }>(created);
+    // price 是 numeric 列，出参必须是数字而不是字符串 —— 前端表单按数字校验。
+    expect(book.price).toBe(42.5);
+    expect(typeof book.price).toBe("number");
+    expect(book.store.id).toBe(store.id);
+    expect(book.authors.map((a) => a.id).sort()).toEqual([first.id, second.id].sort());
+
+    // 传了 authorIds 就整体替换。
+    const replaced = await json<typeof book>(
+      await send(`/book/books/${book.id}`, "PATCH", { authorIds: [second.id] }),
+    );
+    expect(replaced.authors.map((a) => a.id)).toEqual([second.id]);
+
+    // 没传 authorIds 就原样保留，只改名称。
+    const renamed = await json<typeof book>(
+      await send(`/book/books/${book.id}`, "PATCH", { name: `IT-图书改名-${STAMP}` }),
+    );
+    expect(renamed.name).toBe(`IT-图书改名-${STAMP}`);
+    expect(renamed.authors.map((a) => a.id)).toEqual([second.id]);
+
+    expect((await call(`/book/books/${book.id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await call(`/book/books/${book.id}`)).status).toBe(404);
+  });
+
+  it("book：外键指向不存在的书店返回 422", async () => {
+    const response = await send("/book/books", "POST", {
+      name: `IT-孤儿书-${STAMP}`,
+      edition: 1,
+      price: 1,
+      storeId: "99999999",
+    });
+    expect(response.status).toBe(422);
+    expect((await json<{ code: string }>(response)).code).toBe("INVALID_REFERENCE");
+  });
+
+  it("book：edition 传字符串返回 422", async () => {
+    const store = await json<{ id: string }>(await createStore("书店3"));
+    const response = await send("/book/books", "POST", {
+      name: `IT-脏数据-${STAMP}`,
+      edition: "第一版",
+      price: 1,
+      storeId: store.id,
+    });
+    expect(response.status).toBe(422);
+  });
+});
+
+/**
+ * 池是全局单例，**整份文件只关一次**。
+ *
+ * 每个 describe 各自 `close()` 会让先跑完的那个关掉池，后面 describe 的
+ * 查询全部报 “Cannot use a pool after calling end”。所以清理下放到各
+ * describe，关闭只留在这一处。
+ */
+afterAll(async () => {
+  await close();
 });
