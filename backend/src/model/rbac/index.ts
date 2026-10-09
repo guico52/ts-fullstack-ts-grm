@@ -5,23 +5,32 @@ import { auditFields } from "../embedded.ts";
 // 定义任何 model 之前先应用补丁（幂等）。见 model/embedded.ts。
 applyPatches();
 
+/**
+ * 字符串列有两种写法，选哪个只看一件事：**这一列会不会被用来找某一行**
+ * （也就是出现在 WHERE / ORDER BY 里）。
+ *
+ * - `prop.str(n)` → scalarType 是 STR，能构造表达式，可查可排序。
+ * - `prop.text()` → scalarType 是 TEXT，在 ts-grm 0.0.13 里**连 `eq` 都不行**，
+ *   一进查询就抛 `ARGUMENT_ERROR: Cannot create table prop ... is TEXT`。
+ *
+ * 两者生成的 DDL **完全一样**（PostgreSQL 方言下都是 `text`），所以改这一条
+ * **不产生迁移**；`n` 也不进 DDL，取值以 Elysia schema 的 `maxLength` 为准 ——
+ * 让"能存多长"只有一处说法。
+ *
+ * 反过来，**刻意不需要比较**的列保持 `text()`，并在下面逐列注明理由：
+ * 否则下一个人分不清那是设计还是漏改。详见 docs/constraints.md 第 9 节。
+ */
+
 export const SysUser = model("SysUser", "id", class {
   id = prop.i64().autoIncrement().asString();
-  /**
-   * `str` 而不是 `text`，理由同下面的 `email`：两者 DDL 相同，但 `prop.text()`
-   * 的列在 ts-grm 里无法参与查询。管理员初始化要按 name 找人，所以它必须是 STR。
-   */
-  name = prop.str(255);
-  /**
-   * `str` 而不是 `text`。两者生成的 DDL **完全一样**（都是 `text`，不会产生
-   * 迁移），区别在运行时 scalarType：`prop.text()` 是 TEXT，在 ts-grm 里
-   * **根本不能参与 WHERE** —— 连 `email.eq(...)` 都会在建查询时抛
-   * `ARGUMENT_ERROR: Cannot create table prop ... TEXT`。
-   *
-   * 登录要按邮箱查人，所以它必须是 STR。参数 255 只声明意图，DDL 里不出现。
-   * 见 docs/constraints.md 第 9 节。
-   */
+  /** 管理员初始化按名字找人，见 modules/rbac/user/bootstrap.ts。 */
+  name = prop.str(100);
+  /** 登录按邮箱查人，见 modules/auth/repository.ts。 */
   email = prop.str(255);
+  /**
+   * 只被读出来、交给 `Bun.password.verify` 比对 —— **比对发生在应用层**，
+   * SQL 里永远不会出现 `pwd_hash = ...`，所以它不需要可查询：保持 `text()`。
+   */
   pwdHash = prop.text();
   organization = prop.m2o(SysOrganization);
   audit = auditFields;
@@ -30,8 +39,11 @@ export const SysUser = model("SysUser", "id", class {
 
 export const SysOrganization = model("SysOrganization", "id", class {
   id = prop.i64().autoIncrement().asString();
-  name = prop.text();
-  code = prop.text();
+  /** 显示名，会用于排序与搜索。 */
+  name = prop.str(100);
+  /** 编码是这一行的业务标识，迟早要按它找。 */
+  code = prop.str(64);
+  /** 一个 URL，从不作为查询条件 —— 保持 `text()`。 */
   logo = prop.text().nullable();
   users = prop.o2m(SysUser).mappedBy("organization");
   audit = auditFields;
@@ -46,13 +58,18 @@ export const SysViewTypeEnum = {
 
 export const SysView = model("SysView", "id", class {
   id = prop.i64().autoIncrement().asString();
-  name = prop.text();
-  icon = prop.text();
+  /** 显示名，会用于排序与搜索。 */
+  name = prop.str(100);
+  /** 按图标筛选视图是迟早的事。 */
+  icon = prop.str(100);
   // Route and component only apply to a VIEW: a MENU is a grouping node and a
   // BUTTON is a permission point, and neither is rendered by a route.
-  path = prop.text().nullable();
-  componentPath = prop.text().nullable();
-  componentName = prop.text().nullable();
+  /** 路由就是用来定位页面的，必须可查。 */
+  path = prop.str(255).nullable();
+  /** 按组件反查有哪些页面用它。 */
+  componentPath = prop.str(255).nullable();
+  /** 同上，按组件名反查。 */
+  componentName = prop.str(100).nullable();
   sort = prop.i32();
   active = prop.bool().default(true);
   type = prop.enum(SysViewTypeEnum);
@@ -64,7 +81,8 @@ export const SysView = model("SysView", "id", class {
 
 export const SysRole = model("SysRole", "id", class {
   id = prop.i64().autoIncrement().asString();
-  name = prop.text();
+  /** 显示名，会用于排序与搜索。 */
+  name = prop.str(100);
   users = prop.m2m(SysUser).joinTable({
     name: "sys_role_user_mapping",
     joinThisColumns: ["role_id"],
@@ -86,7 +104,8 @@ export const SysRole = model("SysRole", "id", class {
 
 export const SysPermission = model("SysPermission", "id", class {
   id = prop.i64().autoIncrement().asString();
-  name = prop.text();
+  /** 权限名本身就是标识符（如 rbac.organization.read），按它查是常态。 */
+  name = prop.str(100);
   audit = auditFields;
   deletedAt = prop.dt().nullable();
 });

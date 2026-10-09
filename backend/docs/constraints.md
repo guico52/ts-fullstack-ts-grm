@@ -58,6 +58,16 @@ index → service → repository → model/index（client、事务）
 - 模型是 schema 的**唯一来源**：查询投影与迁移 DDL 都由它推导，没有第二份 schema 文件。
 - 一个领域一个文件（如 `rbac/index.ts`），公共字段用嵌入组合（`audit = auditFields`）。
 - 每个定义模型的文件在顶部调用一次 `applyPatches()`——必须在 `model()`/`prop` **之前**。
+- **字符串列用 `prop.str(n)` 还是 `prop.text()`，只看一件事：这一列会不会被用来找某一行。**
+
+  | 这一列… | 用 |
+  | --- | --- |
+  | 会出现在 WHERE / ORDER BY（名字、编码、路由、权限名…） | `prop.str(n)` |
+  | 只被读出来、在**应用层**处理（`pwd_hash` 交给 `Bun.password.verify`，`logo` 是个 URL） | `prop.text()` |
+
+  保持 `text()` 的列要在模型里**逐列注明理由**——否则下一个人分不清那是设计还是漏改。
+  `n` 以对应 Elysia schema 的 `maxLength` 为准，让“能存多长”只有一处说法；
+  它在 PostgreSQL 方言下不进 DDL，所以改这一条不产生迁移（第 9 节有完整解释）。
 
 ### `model/index.ts`
 

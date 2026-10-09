@@ -6,6 +6,12 @@ import { auditFields } from "../embedded.ts";
 applyPatches();
 
 /**
+ * 这里的字符串列一律 `prop.str(n)`：name 会被用来排序与查找，而 `prop.text()`
+ * 的列在 ts-grm 里无法参与查询（为什么、以及为什么改它不产生迁移，见
+ * model/rbac/index.ts 顶部的说明）。n 只声明意图，PostgreSQL 方言下不进 DDL。
+ */
+
+/**
  * 图书域模型。
  *
  * 三个实体刚好演示三种关联：`Book.store` 是多对一（外键在 book 表），
