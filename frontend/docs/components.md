@@ -26,7 +26,11 @@ Project-level building blocks:
 
 - `src/components/layout/` — `PageHeader`, `SectionHeader`, `AppSidebar`,
   `SidebarNav`, `SidebarNavItem`, `AppTopbar`, `ThemeToggle`, `AccentToggle`
-- `src/components/data/` — `StatCard`, `DataPagination`
+- `src/components/data/` — `StatCard`, `DataPagination`, and
+  `ResourceListView`. The last one is the list page every resource shares:
+  table, form dialog, paginator, delete confirmation and relation candidates.
+  A page is its spec plus three API calls — see
+  [principles.md](./principles.md#17-a-page-is-its-data-not-its-markup).
 - `src/components/rbac/` — the RBAC page kit: `ResourceFormDialog` (one
   create/edit dialog all five resources share, fields driven by
   `src/lib/rbac.ts`), `ViewTreeTable` (the view hierarchy, collapsible), and

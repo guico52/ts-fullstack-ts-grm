@@ -1,5 +1,5 @@
 /**
- * Candidates for the relational fields of an RBAC form.
+ * Candidates for the relational fields of any resource form.
  *
  * A picker needs `{ value, label }`, and the label is whatever that
  * resource uses to name a row — which is exactly what `spec.label` already
@@ -7,15 +7,16 @@
  *
  * One page of up to 100 rows is enough for a picker at this size; a
  * resource that outgrows it wants a searchable picker, not a bigger limit.
+ *
+ * The switch is **exhaustive by construction**: `ResourceKey` is a closed
+ * union, so adding a resource without teaching this function how to fetch
+ * it is a typecheck failure rather than an empty dropdown at runtime. That
+ * is what the `never` in the default arm is for — it is a compile-time
+ * assertion, not an error path.
  */
 import { api } from "./api"
-import {
-  RESOURCES,
-  type FieldOption,
-  type ResourceKey,
-  type ResourceRow,
-  type ResourceSpec,
-} from "./rbac"
+import type { FieldOption, ResourceRow, ResourceSpec } from "./resource"
+import { RESOURCES, type ResourceKey } from "./resources"
 
 const OPTION_LIMIT = 100
 
@@ -46,6 +47,25 @@ async function listForOptions(key: ResourceKey): Promise<ResourceRow[]> {
       const { data, error } = await api.rbac.permissions.get({ query })
       if (error) throw error
       return data.data as ResourceRow[]
+    }
+    case "books": {
+      const { data, error } = await api.book.books.get({ query })
+      if (error) throw error
+      return data.data as ResourceRow[]
+    }
+    case "authors": {
+      const { data, error } = await api.book.authors.get({ query })
+      if (error) throw error
+      return data.data as ResourceRow[]
+    }
+    case "stores": {
+      const { data, error } = await api.book.stores.get({ query })
+      if (error) throw error
+      return data.data as ResourceRow[]
+    }
+    default: {
+      const unhandled: never = key
+      throw new Error(`未处理的资源：${String(unhandled)}`)
     }
   }
 }

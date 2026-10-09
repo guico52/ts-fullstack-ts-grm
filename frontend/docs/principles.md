@@ -1,6 +1,6 @@
 # Design principles
 
-Sixteen rules. They are here because each one is a mistake that was made,
+Twenty rules. They are here because each one is a mistake that was made,
 seen in a screenshot, and then made impossible to repeat.
 
 Source guards cover rules 3, 4 and 13; browser tests cover layout,
@@ -357,6 +357,77 @@ a specific failure:
 directly: clicking a Menu must leave the URL unchanged.
 
 See [navigation.md](./navigation.md).
+
+---
+
+## 17. A page is its data, not its markup
+
+Every resource page is a spec in `src/lib/` plus three API calls. The table,
+the form dialog, the paginator and the relation pickers are one component
+(`src/components/data/ResourceListView.vue`), so adding a resource is a spec,
+a thin page, a route and a nav entry.
+
+**Why.** Eight pages had become eight copies of the same 250 lines —
+identical down to the tooltips. They had not _drifted_; they would have, at
+the first change to the paginator. Copy-paste is not a style problem, it is
+a change-amplification problem: the cost is paid at the second edit, not the
+first.
+
+**A page using `ResourceListView` does not import `PageHeader` itself** — the
+component renders one. That is rule 18's business.
+
+---
+
+## 18. A guard may move; it may not weaken
+
+When the tables moved out of `views/` into `ResourceListView`, two guards lost
+their subject at once: "every view goes through `PageHeader`", and "the tables
+rule is actually watching something". The second one **failed**, which is
+exactly what it is for — a guard that matches no file passes for the wrong
+reason and then protects nothing.
+
+**The fix is to move the guard, never to drop it.** The table guard now reads
+`components/data/` as well; the `PageHeader` guard accepts `ResourceListView`
+as a stand-in, and a **new** guard requires that stand-in to actually import
+`PageHeader`. An exemption without a test is a hole.
+
+---
+
+## 19. Nothing that blocks a submit may do it silently
+
+A `<input type="number">` defaults to `step="1"`. A price of 88.50 is then
+invalid — and **a form that fails HTML5 validation never fires `submit`**. No
+request, no message, nothing but a 保存 button that looks dead.
+
+**Why this is a rule and not a bug report.** The failure was invisible to
+typecheck, to the unit tests, to the source guards and to 145 browser tests.
+It was found by typing a decimal into a real form. Any constraint the browser
+can enforce behind your back needs an explicit answer in the spec: a money
+column declares `step: 0.01`, and `src/lib/books.test.ts` pins it.
+
+The general form: when a control can reject input without telling anyone, the
+rejection has to be either impossible or visible.
+
+---
+
+## 20. The control follows the shape of the data
+
+Three pickers, and which one to use is not a matter of taste:
+
+- **one id, searchable** — `Combobox`
+- **several ids** — `MultiSelect`
+- **several ids whose depth means something** — `TreeSelect`
+
+**Why three components rather than one with a `multiple` flag.** The two
+multi-selects differ from the single one in exactly two behaviours — the value
+is a list, and picking one does not close the popover — but the flag would
+turn every prop and every emit site into a union type for no gain.
+
+**And why the tree keeps its hierarchy while searching.** A flat result list
+answers "which rows match"; the question was "which page, under which menu".
+A hit is shown together with its ancestors, never as an orphan. Only branches
+get an expander, and the arrow sits inside the row: clicking it collapses,
+clicking the row selects.
 
 ---
 

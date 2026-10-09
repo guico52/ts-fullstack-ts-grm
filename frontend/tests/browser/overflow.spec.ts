@@ -94,6 +94,9 @@ const PAGES = [
   { path: "/system/views", name: "视图" },
   { path: "/system/roles", name: "角色" },
   { path: "/system/permissions", name: "权限" },
+  { path: "/library/books", name: "图书" },
+  { path: "/library/authors", name: "作者" },
+  { path: "/library/stores", name: "书店" },
 ]
 
 /**

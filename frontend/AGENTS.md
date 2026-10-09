@@ -93,20 +93,23 @@ Full text with reasoning and examples: [`docs/principles.md`](./docs/principles.
 
 ## Where to look
 
-| Need                                 | File                                                           |
-| ------------------------------------ | -------------------------------------------------------------- |
-| A page, with a table and CRUD        | `src/views/system/OrganizationsView.vue`                       |
-| A form                               | `src/components/rbac/ResourceFormDialog.vue`                   |
-| A table + pagination                 | `src/components/data/DataPagination.vue`                       |
-| A sidebar entry or collapsible group | `src/lib/nav.ts`, `src/components/layout/SidebarMenuGroup.vue` |
-| Pure rules + tests                   | `src/lib/rbac.ts`, `src/lib/pagination.ts`                     |
-| The visual system                    | `src/assets/main.css`                                          |
-| How the rules are enforced           | `src/lib/design-system.test.ts`                                |
+| Need                                 | File                                                              |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| A page with a table and CRUD         | `src/components/data/ResourceListView.vue`                        |
+| A resource page (spec + API calls)   | `src/views/library/BooksView.vue`                                 |
+| A form                               | `src/components/rbac/ResourceFormDialog.vue`                      |
+| A table + pagination                 | `src/components/data/DataPagination.vue`                          |
+| A sidebar entry or collapsible group | `src/lib/nav.ts`, `src/components/layout/SidebarMenuGroup.vue`    |
+| Pure rules + tests                   | `src/lib/resource.ts`, `src/lib/rbac.ts`, `src/lib/pagination.ts` |
+| The visual system                    | `src/assets/main.css`                                             |
+| How the rules are enforced           | `src/lib/design-system.test.ts`                                   |
 
 ## Adding a page, in four steps
 
-1. `src/views/<Name>View.vue` — start from the skeleton in
-   [`docs/workflow.md`](./docs/workflow.md#adding-a-page). `PageHeader`
+1. `src/views/<Name>View.vue`. A **resource page** is its spec plus three
+   API calls, and renders `ResourceListView` — see
+   `src/views/library/BooksView.vue`. Anything else starts from the skeleton
+   in [`docs/workflow.md`](./docs/workflow.md#adding-a-page): `PageHeader`
    first, `p-4 space-y-4` container.
 2. Route in `src/router/index.ts`, lazy, with `meta.title`.
 3. Nav entry in `src/lib/nav.ts` — a **View** if the page navigates, a
@@ -128,6 +131,10 @@ Three that cost real debugging time:
 - **`AlertDialogAction` closes the dialog before your `@click` runs**, so
   state your handler reads may already be cleared. Use a plain `Button` and
   close the dialog yourself.
+- **A `<input type="number">` rejects any value its `step` cannot reach, and
+  a form that fails HTML5 validation never fires `submit`.** A `numeric`
+  column holding decimals needs `step: 0.01` in its spec, or the only symptom
+  is a 保存 button that does nothing at all.
 - **`min-w-0` on every flex item** whose content can be wide; without it a
   row does not shrink and the page scrolls sideways.
 

@@ -1,11 +1,15 @@
 import { markRaw, type Component } from "vue"
 import {
+  BookOpen,
   Building2,
   KeyRound,
   LayoutDashboard,
   LayoutList,
+  Library,
+  PenLine,
   Shield,
   ShieldCheck,
+  Store,
   Users,
 } from "@lucide/vue"
 
@@ -100,6 +104,36 @@ export const NAV_ENTRIES: NavEntry[] = [
         to: "/system/permissions",
         icon: markRaw(KeyRound),
         description: "最小授权单元",
+      },
+    ],
+  },
+  {
+    kind: "menu",
+    id: "library",
+    title: "图书管理",
+    icon: markRaw(Library),
+    description: "图书、作者与书店",
+    children: [
+      {
+        kind: "view",
+        title: "图书",
+        to: "/library/books",
+        icon: markRaw(BookOpen),
+        description: "书目、版次与定价",
+      },
+      {
+        kind: "view",
+        title: "作者",
+        to: "/library/authors",
+        icon: markRaw(PenLine),
+        description: "与图书多对多",
+      },
+      {
+        kind: "view",
+        title: "书店",
+        to: "/library/stores",
+        icon: markRaw(Store),
+        description: "图书的归属方",
       },
     ],
   },

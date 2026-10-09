@@ -265,6 +265,7 @@ async function submit(): Promise<void> {
                   "
                   :model-value="String(values[field.key] ?? '')"
                   :placeholder="field.placeholder"
+                  :step="field.kind === 'number' ? (field.step ?? 1) : undefined"
                   :aria-invalid="Boolean(errors[field.key])"
                   @update:model-value="(value: string | number) => setField(field, value)"
                 />

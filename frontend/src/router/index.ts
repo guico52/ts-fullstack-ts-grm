@@ -46,6 +46,24 @@ export const routes = [
     meta: { title: "权限" },
   },
   {
+    path: "/library/books",
+    name: "library-books",
+    component: () => import("@/views/library/BooksView.vue"),
+    meta: { title: "图书" },
+  },
+  {
+    path: "/library/authors",
+    name: "library-authors",
+    component: () => import("@/views/library/AuthorsView.vue"),
+    meta: { title: "作者" },
+  },
+  {
+    path: "/library/stores",
+    name: "library-stores",
+    component: () => import("@/views/library/StoresView.vue"),
+    meta: { title: "书店" },
+  },
+  {
     // Catch-all, last on purpose: anything above wins. An unmatched URL
     // otherwise renders the shell with an empty main area, which reads as
     // a broken app rather than a wrong address.

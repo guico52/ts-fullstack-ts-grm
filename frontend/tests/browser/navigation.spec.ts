@@ -113,7 +113,11 @@ test.describe("icon rail", () => {
     await expect(page.locator("aside")).toHaveCSS("width", "64px")
 
     // The inline group is gone; the parent is still reachable.
-    const trigger = page.locator('aside button[aria-haspopup="menu"]')
+    //
+    // Named, not positional: the rail holds one trigger per Menu, and there
+    // is more than one Menu now. A bare `button[aria-haspopup="menu"]`
+    // matches several and the click lands on whichever comes first.
+    const trigger = page.locator("aside").getByRole("button", { name: "系统管理" })
     await expect(trigger).toBeVisible()
     await trigger.click()
 
@@ -126,7 +130,7 @@ test.describe("icon rail", () => {
     await page.setViewportSize({ width: 1280, height: 900 })
     await gotoPage(page, "/system/organizations")
     await page.getByRole("button", { name: /收起侧栏/i }).click()
-    await page.locator('aside button[aria-haspopup="menu"]').click()
+    await page.locator("aside").getByRole("button", { name: "系统管理" }).click()
     await page.getByRole("menuitem", { name: /用户/ }).click()
     await expect(page).toHaveURL(/\/system\/users$/)
   })

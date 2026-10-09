@@ -69,11 +69,12 @@ lives in [`docs/`](./docs/README.md).
 | File                                         | Why                                                                                                              |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `src/assets/main.css`                        | The whole visual system: OKLCH tokens, the three-number brand accent, both themes, the single radius and shadow. |
-| `src/views/system/OrganizationsView.vue`     | The full table screen: server-side paging, row actions, delete confirmation, two empty states.                   |
+| `src/components/data/ResourceListView.vue`   | The list page every resource shares: table, form dialog, paginator, delete confirmation, relation candidates.    |
 | `src/components/data/DataPagination.vue`     | The paginator every table uses: range readout, page window, page size.                                           |
 | `src/lib/pagination.ts`                      | Paging rules, including the clamp that stops a stale page from emptying a table.                                 |
 | `src/components/rbac/ResourceFormDialog.vue` | One dialog for create and edit across all five resources, with validation and `aria-invalid`.                    |
-| `src/lib/rbac.ts`                            | Resource metadata and the rules as plain functions — the layer that has edge cases and needs no rendering.       |
+| `src/lib/rbac.ts`                            | RBAC resource metadata, as plain data — the layer that has edge cases and needs no rendering.                    |
+| `src/lib/resource.ts`                        | The vocabulary those specs are written in: `ResourceSpec`, the row readers, the validators.                      |
 | `src/lib/design-system.test.ts`              | How the visual rules are kept from decaying.                                                                     |
 | `tests/browser/overflow.spec.ts`             | The overflow check: every page at every breakpoint, in a real browser.                                           |
 

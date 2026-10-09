@@ -175,6 +175,7 @@ resource spec, and the spec carries the layout:
 | `requiredWhen` | required only for some kinds — a button needs a parent, a page may not |
 | `auto`         | a value the dialog derives from the others, until you type one         |
 | `picker`       | how a multi-value field is chosen: a flat `MultiSelect`, or the tree   |
+| `step`         | the step a `number` input allows — `0.01` for a money column           |
 
 ```ts
 { key: "type", label: "类型", kind: "select", span: 1,
@@ -211,6 +212,12 @@ stops the moment the user types into it, so changing the level never
 overwrites a value someone chose. The backend computes the same number
 inside the insert transaction, so a caller that skips the form (or two forms
 at once) still lands at the end of the level rather than at 0.
+
+**A number field must declare a `step` when its column holds decimals.** A
+`<input type="number">` defaults to `step="1"`, so `numeric(10, 2)` refuses
+88.50 — and a form that fails HTML5 validation **never fires `submit`**. No
+request, no message, nothing but a dead 保存 button. See
+[principles.md](./principles.md#19-nothing-that-blocks-a-submit-may-do-it-silently).
 
 **Enumerated and reference fields are dropdowns, not text inputs.** `kind:
 "select"` and `kind: "component"` render the `Combobox` from

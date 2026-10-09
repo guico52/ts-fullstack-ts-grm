@@ -123,13 +123,30 @@ function domTags(file: string): string[] {
 
 // ---------------------------------------------------------------------------
 describe("page chrome", () => {
+  /**
+   * A page either renders its own `PageHeader` or hands the job to
+   * `ResourceListView`, which renders one.
+   *
+   * The rule these guards exist for is "exactly one h1, owned by
+   * PageHeader"; both spellings satisfy it, and the third test below pins
+   * PageHeader itself. The exemption is not a weakening — the next test
+   * requires the stand-in to actually import PageHeader, so the white-list
+   * cannot be used to route around the rule.
+   */
+  const PAGE_HEADER_IMPORT = /from ["']@\/components\/layout\/PageHeader\.vue["']/
+  const LIST_VIEW_IMPORT = /from ["']@\/components\/data\/ResourceListView\.vue["']/
+
   it("every view goes through PageHeader", () => {
     const views = vueSources("views")
     expect(views.length).toBeGreaterThan(0)
     const offenders = views
-      .filter((v) => !/from ["']@\/components\/layout\/PageHeader\.vue["']/.test(v.text))
+      .filter((v) => !PAGE_HEADER_IMPORT.test(v.text) && !LIST_VIEW_IMPORT.test(v.text))
       .map((v) => v.path)
     expect(offenders).toEqual([])
+  })
+
+  it("the list view renders the PageHeader it stands in for", () => {
+    expect(read("components/data/ResourceListView.vue")).toMatch(PAGE_HEADER_IMPORT)
   })
 
   it("no view declares its own h1 — PageHeader owns the only one", () => {
@@ -149,7 +166,19 @@ describe("page chrome", () => {
 
 // ---------------------------------------------------------------------------
 describe("tables are paginated", () => {
-  const withTable = () => vueSources("views").filter((v) => /<Table\b|<TableBody\b/.test(v.text))
+  /**
+   * Tables live in `views/` no longer: every one of them is rendered by
+   * `ResourceListView` in `components/data/`. So the guard reads both, or it
+   * would match nothing and pass for the wrong reason — which is what the
+   * first test below caught when the tables moved, and why it is there.
+   *
+   * `components/rbac/ViewTreeTable.vue` is deliberately out of scope: a tree
+   * has no page number to jump to and renders no paginator on purpose.
+   */
+  const withTable = () =>
+    [...vueSources("views"), ...vueSources("components/data")].filter((v) =>
+      /<Table\b|<TableBody\b/.test(v.text),
+    )
 
   it("the rule is actually watching something", () => {
     // A guard that matches no file passes for the wrong reason and then
@@ -157,7 +186,7 @@ describe("tables are paginated", () => {
     expect(withTable().length).toBeGreaterThan(0)
   })
 
-  it("every view with a table renders the shared paginator", () => {
+  it("every file with a table renders the shared paginator", () => {
     const offenders = withTable()
       .filter((v) => !/DataPagination/.test(v.text))
       .map((v) => v.path)
