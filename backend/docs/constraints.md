@@ -280,6 +280,23 @@ bun run db:push            # 直接把库同步成模型形状（不写历史，
 
 ## 9. 上游已知限制（踩坑记录）
 
+- **`prop.text()` 的列不能参与 WHERE。** 它生成的 DDL 和 `prop.str(n)` 完全一样（都是 `text`），
+  但 scalarType 是 **TEXT**，而 ts-grm 只为 **STR** 生成表达式：
+  `user.email.eq(...)` 直接抛 `ARGUMENT_ERROR: Cannot create table prop ... whose scalar type
+is TEXT` —— **连 `eq` 都不行**，更不用说 `lower()` / `ilike()`。
+  要按某一列查询或排序，就用 `prop.str(n)`。`SysUser.email` 与 `SysUser.name` 就是
+  为此从 `text()` 改过来的。
+
+  **差别在 ts-grm 的类型标签，不在 PostgreSQL。** `ScalarType.TEXT` 的 kind 是 `"TEXT"`，
+  `ScalarType.str(n)` 是 `"STR"`（带 length）；而 `createTableProp()` 的 switch 只处理
+  `I8/I16/I32/I64/NUM/F32/F64/STR/DATETIME` —— **没有 `"TEXT"`**，所以抛错。而 PostgreSQL
+  方言把 STR 直接写成 `text`（n 不进 DDL，其他方言才用它生成 `varchar(n)`），
+  因此**改这一条不产生迁移**。
+
+  > 可以自查，不必相信：把一个 `text` 列临时改成 `prop.i32()`，`tgm check` 会立刻报
+  > 「列 X：类型应为 integer」—— 说明它**确实在比较列类型**。于是 `text()` → `str(n)`
+  > 之后 check 仍说“一致”，就证明了生成的 SQL 类型没变。
+
 - **`.use(工厂)` 与 `.use(工厂())` 不是一回事。** Elysia 见到函数就当 functional plugin，
   拿**当前实例**去调它；而我们的工厂忽略入参、返回新实例 —— 返回的那个实例成了新的根，
   **其后**所有 `.use()` 都嵌进了它的 prefix。实测得到一组
