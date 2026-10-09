@@ -90,7 +90,12 @@ export async function ready(): Promise<boolean>; // 业务表探针
   不再往业务层传数据库句柄。
 
 > `src/model/` 下的文件会被**迁移工具**用 Node 原生 import 加载（含 `index.ts`）。
-> 因此该目录内及其引用链上的相对导入一律写显式 `.ts` 扩展名。
+> 因此**该目录内**的相对导入、以及它们引用到的文件（如 `../errors.ts`）一律写显式 `.ts`。
+>
+> **边界就在 `src/model/`。** 其他地方的相对导入**不带**扩展名：
+> `modules/**/repository.ts` 里写 `from "../../../model"`（目录名，解析到 `index.ts`），
+> `app.ts` 里写 `from "./modules/rbac"`——它们跑在 **Bun** 下，不经过 Node 的解析器。
+> 照抄 `repository.ts` 的写法去改 `model/` 里的导入，`tgm` 会直接报模块找不到。
 
 ### 全局过滤器
 

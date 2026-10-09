@@ -9,9 +9,9 @@ import {
   InvalidHierarchyError,
   ResourceNotFoundError,
 } from "./errors.ts";
-import { ready } from "./model/index.ts";
-import { bookModule } from "./modules/book/index.ts";
-import { rbacModule } from "./modules/rbac/index.ts";
+import { ready } from "./model";
+import { bookModule } from "./modules/book";
+import { rbacModule } from "./modules/rbac";
 
 // 配置直接取自环境变量（Bun 会自动加载 backend/.env）。
 const nodeEnv = process.env.NODE_ENV ?? "development";
