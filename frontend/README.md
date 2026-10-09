@@ -89,7 +89,7 @@ A field's label, control, help text and error sit `gap-3` apart inside a
 `Field`. Separate fields sit `gap-7` apart inside a `FieldGroup`. Giving
 every element the same gap is the single most common reason a form built
 from these same components still looks unfinished — the eye has no way to
-tell which hint belongs to which input.
+tell a description apart from the next field's label.
 
 **2. Page padding is one of two values.**
 `p-4 space-y-4` for ordinary pages, `p-4 md:p-6 space-y-6` for a

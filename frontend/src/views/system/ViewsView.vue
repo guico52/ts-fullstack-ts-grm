@@ -137,7 +137,7 @@ async function confirmDelete() {
 
 <template>
   <div class="p-4 space-y-4">
-    <PageHeader :title="spec.title" :subtitle="spec.subtitle">
+    <PageHeader :title="spec.title">
       <template #actions>
         <Button @click="openCreate">
           <Plus class="size-4" />
@@ -156,7 +156,7 @@ async function confirmDelete() {
           结果
         </CardTitle>
         <!-- Say what the number counts, and how the rows are organised. -->
-        <CardDescription>共 {{ total }} 条，按 菜单 → 页面 → 按钮 三层展开</CardDescription>
+        <CardDescription>共 {{ total }} 条</CardDescription>
       </CardHeader>
 
       <CardContent class="px-0">

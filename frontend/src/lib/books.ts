@@ -18,7 +18,6 @@ export const STORES: ResourceSpec = {
   key: "stores",
   title: "书店",
   singular: "书店",
-  subtitle: "书店是图书的归属方，一本书只能属于一个书店。",
   columns: [{ key: "name", label: "名称", value: (row) => rowText(row, "name") }],
   fields: [
     {
@@ -37,7 +36,6 @@ export const AUTHORS: ResourceSpec = {
   key: "authors",
   title: "作者",
   singular: "作者",
-  subtitle: "作者与图书是多对多，一本书可以有多位作者。",
   columns: [{ key: "name", label: "名称", value: (row) => rowText(row, "name") }],
   fields: [
     {
@@ -56,7 +54,6 @@ export const BOOKS: ResourceSpec = {
   key: "books",
   title: "图书",
   singular: "图书",
-  subtitle: "书目按书店与作者组织，版次与定价随书保存。",
   columns: [
     { key: "name", label: "书名", value: (row) => rowText(row, "name") },
     { key: "edition", label: "版次", align: "right", value: (row) => rowText(row, "edition") },
@@ -88,7 +85,6 @@ export const BOOKS: ResourceSpec = {
       required: true,
       legend: "基本信息",
       placeholder: "例如：深入理解计算机系统",
-      hint: "图书的正式名称。",
     },
     {
       key: "edition",
@@ -97,7 +93,6 @@ export const BOOKS: ResourceSpec = {
       required: true,
       span: 1,
       placeholder: "例如：3",
-      hint: "第几版，从 1 开始。",
     },
     {
       key: "price",
@@ -108,7 +103,6 @@ export const BOOKS: ResourceSpec = {
       // numeric(10, 2)：默认 step=1 会让 88.50 无法提交，且不报错。
       step: 0.01,
       placeholder: "例如：128.00",
-      hint: "单位为元，最多两位小数。",
     },
     {
       key: "storeId",
@@ -117,14 +111,12 @@ export const BOOKS: ResourceSpec = {
       required: true,
       legend: "关联",
       from: "stores",
-      hint: "列是 NOT NULL，所以必填。",
     },
     {
       key: "authorIds",
       label: "作者",
       kind: "links",
       from: "authors",
-      hint: "可多选；保存时整体替换。",
     },
   ],
   label: (row) => rowText(row, "name"),

@@ -88,9 +88,14 @@ test.describe("view tree", () => {
     await expect(page.locator("table tbody tr")).toHaveCount(3)
   })
 
-  test("shows the three levels in the header, not just a count", async ({ page }) => {
+  test("the header counts rows and explains nothing", async ({ page }) => {
     await gotoPage(page, "/system/views")
-    await expect(page.getByText(/菜单 → 页面 → 按钮/)).toBeVisible()
+
+    // 层级已经由缩进和配色表达了。再写一行“按 菜单 → 页面 → 按钮 三层
+    // 展开”就是解释，而且会随实现腐烂（见 principles 第 21 条）。
+    // 这条断言守住它不再长回来。
+    await expect(page.getByText(/共 \d+ 条/)).toBeVisible()
+    await expect(page.getByText(/菜单 → 页面 → 按钮/)).toHaveCount(0)
   })
 
   test("a new node's order follows the level it lands in", async ({ page }) => {

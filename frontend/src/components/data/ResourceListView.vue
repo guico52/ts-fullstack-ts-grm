@@ -139,7 +139,7 @@ async function confirmDelete() {
 
 <template>
   <div class="p-4 space-y-4">
-    <PageHeader :title="spec.title" :subtitle="spec.subtitle">
+    <PageHeader :title="spec.title">
       <template #actions>
         <Button @click="openCreate">
           <Plus class="size-4" />
@@ -274,9 +274,7 @@ async function confirmDelete() {
           <AlertDialogTitle>
             删除「{{ pendingDelete ? spec.label(pendingDelete) : "" }}」？
           </AlertDialogTitle>
-          <AlertDialogDescription>
-            该{{ spec.singular }}会被软删除，之后不再出现在列表与查询中。
-          </AlertDialogDescription>
+          <AlertDialogDescription>删除后无法从界面恢复。</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>取消</AlertDialogCancel>

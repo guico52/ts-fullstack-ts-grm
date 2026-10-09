@@ -34,7 +34,13 @@ export type ResourceRow = Record<string, unknown>
 export interface FieldOption {
   value: string
   label: string
-  /** Secondary text, shown right-aligned in a picker — a route, a code. */
+  /**
+   * Secondary text on a picker option, right-aligned and monospaced.
+   *
+   * **This carries data, not prose.** A route, a code, a file name —
+   * something the user is choosing *between*. `用于分组` is prose and does
+   * not belong here; see docs/principles.md 第 21 条。
+   */
   hint?: string
   /** Leading glyph. */
   icon?: Component
@@ -71,12 +77,6 @@ export interface ResourceField {
    *  "leave blank to keep the current password" expressible. */
   requiredOnUpdate?: boolean
   placeholder?: string
-  /**
-   * One sentence on *why* the field exists, under the control. A field with
-   * no explanation is a field the user has to guess about — and the guess is
-   * usually about what it is for, not what to type.
-   */
-  hint?: string
   /**
    * Section this field belongs to. Fields sharing a `legend` are rendered
    * together, in declaration order, under one heading; a `legend` that
@@ -186,7 +186,6 @@ export interface ResourceSpec {
   /** Page heading and menu label. */
   title: string
   singular: string
-  subtitle: string
   /**
    * Dialog width. Optional — `ResourceFormDialog` picks one from the field
    * layout when this is absent, widening for dialogs whose fields pair up.

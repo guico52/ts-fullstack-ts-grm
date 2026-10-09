@@ -38,11 +38,14 @@ test.describe("view form", () => {
     await expect(dialog.getByText("Users", { exact: true }).first()).toBeVisible()
   })
 
-  test("a select field is a dropdown, with its hint on each option", async ({ page }) => {
+  test("a select field is a dropdown, and its options are not explained", async ({ page }) => {
     const dialog = await openCreate(page)
 
     await dialog.getByLabel("类型", { exact: true }).click()
-    await expect(listbox(page).getByText("用于分组")).toBeVisible()
+    await expect(listbox(page).getByText("菜单", { exact: true })).toBeVisible()
+    // 选项只给名字。解释要么进了 label，要么进了控件本身（见
+    // principles 第 21 条）——这条断言就是那个规则的守卫。
+    await expect(listbox(page)).not.toContainText("用于分组")
     await listbox(page).getByRole("button", { name: /菜单/ }).click()
 
     await expect(dialog.getByLabel("类型", { exact: true })).toContainText("菜单")

@@ -25,16 +25,16 @@ dialog for create and edit, with its fields driven by the resource metadata in
 
 Four parts, one job each:
 
-| Part               | Job                                           |
-| ------------------ | --------------------------------------------- |
-| `FieldGroup`       | Spaces **fields** apart (28px)                |
-| `Field`            | Spaces a **label from its control** (12px)    |
-| `FieldLabel`       | The label. Takes `for`, like a real `<label>` |
-| `FieldDescription` | Persistently visible help                     |
-| `FieldError`       | The error, in place of the description        |
+| Part               | Job                                                         |
+| ------------------ | ----------------------------------------------------------- |
+| `FieldGroup`       | Spaces **fields** apart (28px)                              |
+| `Field`            | Spaces a **label from its control** (12px)                  |
+| `FieldLabel`       | The label. Takes `for`, like a real `<label>`               |
+| `FieldDescription` | Persistent help text. Rarely the right answer — see rule 21 |
+| `FieldError`       | The error, in place of the description                      |
 
 **The whole point is the ratio.** Field-internal gap < field gap. If you set
-one gap for everything, the hint under an input reads as the label of the
+one gap for everything, a description under an input reads as the label of the
 next input. See [principles.md](./principles.md#1-two-spacing-levels-never-one).
 
 ---
@@ -63,10 +63,9 @@ Three things, all required:
     id="email"
     v-model="email"
     :aria-invalid="errors.email ? true : undefined"
-    :aria-describedby="errors.email ? 'email-error' : 'email-hint'"
+    :aria-describedby="errors.email ? 'email-error' : undefined"
   />
-  <FieldDescription v-if="!errors.email" id="email-hint">…</FieldDescription>
-  <FieldError v-else id="email-error">{{ errors.email }}</FieldError>
+  <FieldError v-if="errors.email" id="email-error">{{ errors.email }}</FieldError>
 </Field>
 ```
 
@@ -169,7 +168,6 @@ resource spec, and the spec carries the layout:
 | -------------- | ---------------------------------------------------------------------- |
 | `legend`       | starts a section; following fields without one join it                 |
 | `span: 1`      | half width on a wide dialog, so two short fields share a row           |
-| `hint`         | one line under the control saying _why_ the field exists               |
 | `clearable`    | the picker offers a row that empties a non-required field              |
 | `visibleWhen`  | hides the field when the record's kind makes it meaningless            |
 | `requiredWhen` | required only for some kinds — a button needs a parent, a page may not |
@@ -179,8 +177,8 @@ resource spec, and the spec carries the layout:
 
 ```ts
 { key: "type", label: "类型", kind: "select", span: 1,
-  legend: "基本信息", options: VIEW_TYPES, hint: "菜单用于分组，页面承载组件。" },
-{ key: "sort", label: "排序", kind: "number", span: 1, hint: "同一层级内由小到大。" },
+  legend: "基本信息", options: VIEW_TYPES },
+{ key: "sort", label: "排序", kind: "number", span: 1 },
 { key: "componentPath", kind: "component", legend: "组件与路由",
   required: true, visibleWhen: (v) => v.type === "VIEW", derive: /* … */ },
 ```
@@ -223,8 +221,8 @@ request, no message, nothing but a dead 保存 button. See
 "select"` and `kind: "component"` render the `Combobox` from
 `components/ui/combobox/` — a trigger plus a searchable popover. The old
 `NativeSelect` was a `<select>` wearing the input's classes: it opened the OS
-menu, could not be searched, and had nowhere to put an option's hint. It
-stays only for registry components that use it internally (`Calendar`).
+menu and could not be searched. It stays only for registry components that
+use it internally (`Calendar`).
 
 **A relation with several values is a `MultiSelect`, and one whose ids form a
 tree is a `TreeSelect`.** Both are `kind: "links"`, told apart by
@@ -233,8 +231,8 @@ both: a role grants _pages_, which only mean something under their menu, and
 _permissions_, which are a flat set. The form picks the shape from the spec, so
 the two controls never have to be chosen between by hand — see
 [`components.md`](./components.md#the-three-pickers). Everything the picker
-offers is a convenience; the write is still a whole-set replacement
-documented by the field's `hint`.
+offers is a convenience; the write is still a whole-set replacement, which is
+documented here and not on the form.
 
 **Width follows the layout.** A dialog whose fields pair up opens at `xl`
 (768px) instead of `md` (512px) — pairing is a trap otherwise, because two

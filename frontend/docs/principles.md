@@ -1,6 +1,6 @@
 # Design principles
 
-Twenty rules. They are here because each one is a mistake that was made,
+Twenty-one rules. They are here because each one is a mistake that was made,
 seen in a screenshot, and then made impossible to repeat.
 
 Source guards cover rules 3, 4 and 13; browser tests cover layout,
@@ -428,6 +428,49 @@ answers "which rows match"; the question was "which page, under which menu".
 A hit is shown together with its ancestors, never as an orphan. Only branches
 get an expander, and the arrow sits inside the row: clicking it collapses,
 clicking the row selects.
+
+---
+
+## 21. The screen explains nothing
+
+A label says what a field is. Nothing else on the screen says why the field
+exists, what it means, or how the system stores it.
+
+**Why.** Every explanatory line is read once — by the person who wrote it.
+After that it is furniture: it takes a row of height, it competes with the
+error message that lands in the same slot, and it goes stale the moment the
+rule changes. The worst of them are addressed to the wrong reader:
+
+- `列是 NOT NULL，所以必填。` — a note about the database, on a page whose
+  reader is filling in a form.
+- `保存时整体替换。` — how the write works, not what the user is choosing.
+- `共 12 条，按 菜单 → 页面 → 按钮 三层展开。` — the indentation already
+  says that, and says it without being read.
+
+**A rule that needs explaining is usually a rule the interface should be
+enforcing.** Move it into a control:
+
+| Instead of saying…         | Do this                              |
+| -------------------------- | ------------------------------------ |
+| 按钮必须挂在页面下         | the parent picker offers only pages  |
+| 同层级内由小到大           | the next number is already filled in |
+| 选中后组件名与路由一并填好 | they are already filled in           |
+| 单位为元，最多两位小数     | the input's `step` is `0.01`         |
+
+If a rule cannot be expressed as a control, it belongs in the **error
+message** — the one place a user is genuinely reading.
+
+**What is allowed.** These are not explanations and they stay: a
+placeholder is an example (`例如：新华书店`), an empty state is a state
+(`还没有图书。`), a validation error says what is wrong, a tooltip names an
+icon-only button, and a page's subtitle may say what the page is _for_.
+
+**A picker option's `hint` carries data, not prose.** A route, a code, a
+file name — something the user is choosing _between_. `用于分组` is prose,
+and it does not belong there.
+
+**Enforced by review, and by absence.** `ResourceField.hint` no longer
+exists, so the scaffold cannot grow one back out of habit.
 
 ---
 

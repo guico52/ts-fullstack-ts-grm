@@ -14,7 +14,7 @@
  * in the same language. Re-exported here so `from "@/lib/rbac"` keeps
  * working for the pages and the dialog.
  */
-import type { CellBadge, ResourceSpec } from "./resource"
+import type { CellBadge, FieldOption, ResourceSpec } from "./resource"
 import { idsOf, nestedLength, nestedName, rowText } from "./resource"
 import { nextSort, type ViewTreeRow } from "./view-tree"
 import { VIEW_COMPONENTS } from "./views-catalog"
@@ -37,10 +37,10 @@ export const BADGE_TONES = {
   off: "bg-muted text-muted-foreground",
 } as const
 
-export const VIEW_TYPES: readonly { value: string; label: string; hint: string }[] = [
-  { value: "MENU", label: "菜单", hint: "用于分组" },
-  { value: "VIEW", label: "页面", hint: "承载组件" },
-  { value: "BUTTON", label: "按钮", hint: "最小授权点" },
+export const VIEW_TYPES: readonly FieldOption[] = [
+  { value: "MENU", label: "菜单" },
+  { value: "VIEW", label: "页面" },
+  { value: "BUTTON", label: "按钮" },
 ]
 
 /** The badge a view's kind earns. */
@@ -76,7 +76,6 @@ export const ORGANIZATIONS: ResourceSpec = {
   key: "organizations",
   title: "组织",
   singular: "组织",
-  subtitle: "组织是用户与权限的归属边界。",
   columns: [
     { key: "name", label: "名称", value: (row) => rowText(row, "name") },
     { key: "code", label: "编码", mono: true, value: (row) => rowText(row, "code") },
@@ -95,7 +94,6 @@ export const USERS: ResourceSpec = {
   key: "users",
   title: "用户",
   singular: "用户",
-  subtitle: "用户属于一个组织，口令只以哈希形式保存。",
   columns: [
     { key: "name", label: "姓名", value: (row) => rowText(row, "name") },
     { key: "email", label: "邮箱", mono: true, value: (row) => rowText(row, "email") },
@@ -115,7 +113,6 @@ export const USERS: ResourceSpec = {
       kind: "text",
       required: true,
       requiredOnUpdate: false,
-      hint: "创建时必填；编辑时留空表示不修改。",
     },
     {
       key: "organizationId",
@@ -140,7 +137,6 @@ export const VIEWS: ResourceSpec = {
   key: "views",
   title: "视图",
   singular: "视图",
-  subtitle: "视图描述前端可访问的菜单、页面与按钮。",
   columns: [
     { key: "name", label: "名称", value: (row) => rowText(row, "name") },
     { key: "path", label: "路径", mono: true, value: (row) => rowText(row, "path") },
@@ -178,7 +174,6 @@ export const VIEWS: ResourceSpec = {
       required: true,
       placeholder: "例如：组织管理",
       legend: "基本信息",
-      hint: "显示在侧栏和面包屑上的名字。",
     },
     {
       key: "type",
@@ -187,14 +182,12 @@ export const VIEWS: ResourceSpec = {
       required: true,
       span: 1,
       options: VIEW_TYPES,
-      hint: "菜单用于分组，页面承载组件，按钮是最小授权点。",
     },
     {
       key: "sort",
       label: "排序",
       kind: "number",
       span: 1,
-      hint: "同层级内由小到大；不填则由系统排到同级最后。",
       // A position among siblings: it follows the parent, which is itself a
       // field. Any sibling level counts on its own.
       auto: (values, rows) =>
@@ -208,7 +201,6 @@ export const VIEWS: ResourceSpec = {
       span: 1,
       legend: "组件与路由",
       visibleWhen: isPage,
-      hint: "选中后，组件名与路由一并填好。",
       // One choice, three columns: the file name is the component name, and
       // its kebab-case form is the route. See lib/views-catalog.ts.
       derive: (componentPath) => {
@@ -224,7 +216,6 @@ export const VIEWS: ResourceSpec = {
       span: 1,
       placeholder: "由所选组件自动填写",
       visibleWhen: isPage,
-      hint: "组件文件名，大驼峰形式。",
     },
     {
       key: "path",
@@ -233,7 +224,6 @@ export const VIEWS: ResourceSpec = {
       required: true,
       placeholder: "由所选组件自动填写",
       visibleWhen: isPage,
-      hint: "组件名的小写加 - 形式。",
     },
     {
       key: "icon",
@@ -241,7 +231,6 @@ export const VIEWS: ResourceSpec = {
       kind: "icon",
       required: true,
       legend: "显示与层级",
-      hint: "从下面的清单中点选；悬停可以看到图标名。",
     },
     {
       key: "parentId",
@@ -252,14 +241,12 @@ export const VIEWS: ResourceSpec = {
       clearable: true,
       visibleWhen: (values) => values.type !== "MENU",
       requiredWhen: needsParent,
-      hint: "页面可挂在菜单下，也可独立；按钮必须挂在页面下。",
     },
     {
       key: "active",
       label: "启用",
       kind: "boolean",
       span: 1,
-      hint: "关闭后不参与导航，配置仍然保留。",
     },
   ],
   label: (row) => rowText(row, "name"),
@@ -285,7 +272,6 @@ export const ROLES: ResourceSpec = {
   key: "roles",
   title: "角色",
   singular: "角色",
-  subtitle: "角色把用户、视图与权限绑在一起。",
   columns: [
     { key: "name", label: "名称", value: (row) => rowText(row, "name") },
     { key: "users", label: "用户", align: "right", value: (row) => nestedLength(row, "users") },
@@ -299,21 +285,19 @@ export const ROLES: ResourceSpec = {
   ],
   fields: [
     { key: "name", label: "名称", kind: "text", required: true, placeholder: "例如：管理员" },
-    { key: "userIds", label: "用户", kind: "links", from: "users", hint: "保存时整体替换。" },
+    { key: "userIds", label: "用户", kind: "links", from: "users" },
     {
       key: "viewIds",
       label: "视图",
       kind: "links",
       from: "views",
       picker: "tree",
-      hint: "按 菜单 → 页面 → 按钮 的层级选择；保存时整体替换。",
     },
     {
       key: "permissionIds",
       label: "权限",
       kind: "links",
       from: "permissions",
-      hint: "保存时整体替换。",
     },
   ],
   label: (row) => rowText(row, "name"),
@@ -329,7 +313,6 @@ export const PERMISSIONS: ResourceSpec = {
   key: "permissions",
   title: "权限",
   singular: "权限",
-  subtitle: "权限是最小的授权单元，由角色聚合。",
   columns: [{ key: "name", label: "名称", value: (row) => rowText(row, "name") }],
   fields: [
     {

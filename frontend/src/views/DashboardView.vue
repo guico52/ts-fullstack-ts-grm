@@ -1,19 +1,133 @@
 <script setup lang="ts">
-import { Building2, KeyRound, LayoutList, ShieldCheck, Users } from "@lucide/vue"
+import { onMounted, ref } from "vue"
+import {
+  BookOpen,
+  Building2,
+  KeyRound,
+  LayoutList,
+  PenLine,
+  ShieldCheck,
+  Store,
+  Users,
+} from "@lucide/vue"
 
-import PageHeader from "@/components/layout/PageHeader.vue"
-import SectionHeader from "@/components/layout/SectionHeader.vue"
 import StatCard from "@/components/data/StatCard.vue"
-import { Card, CardContent } from "@/components/ui/card"
+import PageHeader from "@/components/layout/PageHeader.vue"
+import { api } from "@/lib/api.ts"
 
-/** The five RBAC resources, so the overview doubles as the map of the app. */
-const MODULES = [
-  { label: "组织", to: "/system/organizations", icon: Building2, hint: "组织单位" },
-  { label: "用户", to: "/system/users", icon: Users, hint: "用户与所属组织" },
-  { label: "视图", to: "/system/views", icon: LayoutList, hint: "菜单、页面与按钮" },
-  { label: "角色", to: "/system/roles", icon: ShieldCheck, hint: "用户、视图与权限" },
-  { label: "权限", to: "/system/permissions", icon: KeyRound, hint: "最小授权单元" },
+/**
+ * Every card is a row count.
+ *
+ * This page used to list the API routes and explain the persistence split —
+ * written for whoever built the scaffold, read by nobody else. A count is
+ * the one thing an overview can say that the sidebar cannot.
+ */
+const CARDS = [
+  {
+    key: "organizations",
+    label: "组织",
+    icon: Building2,
+    count: async () => {
+      const { data, error } = await api.rbac.organizations.get({ query: { limit: 1, offset: 0 } })
+      if (error) throw error
+      return data.total
+    },
+  },
+  {
+    key: "users",
+    label: "用户",
+    icon: Users,
+    count: async () => {
+      const { data, error } = await api.rbac.users.get({ query: { limit: 1, offset: 0 } })
+      if (error) throw error
+      return data.total
+    },
+  },
+  {
+    key: "views",
+    label: "视图",
+    icon: LayoutList,
+    count: async () => {
+      const { data, error } = await api.rbac.views.get({ query: { limit: 1, offset: 0 } })
+      if (error) throw error
+      return data.total
+    },
+  },
+  {
+    key: "roles",
+    label: "角色",
+    icon: ShieldCheck,
+    count: async () => {
+      const { data, error } = await api.rbac.roles.get({ query: { limit: 1, offset: 0 } })
+      if (error) throw error
+      return data.total
+    },
+  },
+  {
+    key: "permissions",
+    label: "权限",
+    icon: KeyRound,
+    count: async () => {
+      const { data, error } = await api.rbac.permissions.get({ query: { limit: 1, offset: 0 } })
+      if (error) throw error
+      return data.total
+    },
+  },
+  {
+    key: "books",
+    label: "图书",
+    icon: BookOpen,
+    count: async () => {
+      const { data, error } = await api.book.books.get({ query: { limit: 1, offset: 0 } })
+      if (error) throw error
+      return data.total
+    },
+  },
+  {
+    key: "authors",
+    label: "作者",
+    icon: PenLine,
+    count: async () => {
+      const { data, error } = await api.book.authors.get({ query: { limit: 1, offset: 0 } })
+      if (error) throw error
+      return data.total
+    },
+  },
+  {
+    key: "stores",
+    label: "书店",
+    icon: Store,
+    count: async () => {
+      const { data, error } = await api.book.stores.get({ query: { limit: 1, offset: 0 } })
+      if (error) throw error
+      return data.total
+    },
+  },
 ]
+
+/** `null` means the count could not be read — an em dash, not a zero. */
+const counts = ref<Record<string, number | null>>({})
+const loading = ref(true)
+
+onMounted(async () => {
+  // One failing resource must not take the page down with it.
+  const entries = await Promise.all(
+    CARDS.map(async (card) => {
+      try {
+        return [card.key, await card.count()] as const
+      } catch {
+        return [card.key, null] as const
+      }
+    }),
+  )
+  counts.value = Object.fromEntries(entries)
+  loading.value = false
+})
+
+function valueOf(key: string): string {
+  const value = counts.value[key]
+  return value === null || value === undefined ? "—" : String(value)
+}
 </script>
 
 <template>
@@ -21,36 +135,17 @@ const MODULES = [
        invents its own padding is the fastest way for an app to stop
        looking like one app. -->
   <div class="p-4 space-y-4">
-    <PageHeader title="总览" subtitle="系统管理的入口——左侧「系统管理」下有五个资源页。" />
+    <PageHeader title="总览" />
 
-    <SectionHeader>模块</SectionHeader>
-
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard
-        v-for="module in MODULES"
-        :key="module.to"
-        :label="module.label"
-        value="管理"
-        :icon="module.icon"
-        :hint="module.hint"
+        v-for="card in CARDS"
+        :key="card.key"
+        :label="card.label"
+        :icon="card.icon"
+        :value="valueOf(card.key)"
+        :loading="loading"
       />
     </div>
-
-    <SectionHeader>从这里开始</SectionHeader>
-
-    <Card>
-      <CardContent class="space-y-3 text-sm">
-        <p class="text-muted-foreground">
-          后端提供 <span class="font-mono text-xs">/rbac/*</span> 五组接口，页面与它们一一对应：
-          分页列表、<span class="font-mono text-xs">GET /:id</span>、创建、局部更新、软删除。
-        </p>
-        <ul class="ml-4 list-disc space-y-1.5 text-muted-foreground">
-          <li>读走 ts-grm 的查询 DSL，写走原生参数化 SQL——见后端约束。</li>
-          <li>删除是软删除：记录留在库里，但不再出现在列表与查询中。</li>
-          <li>新建与编辑复用同一个弹窗表单，字段由资源的定义驱动。</li>
-          <li>表格分页由后端承担，页码与每页条数都会带到请求里。</li>
-        </ul>
-      </CardContent>
-    </Card>
   </div>
 </template>

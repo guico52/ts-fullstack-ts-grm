@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dialog"
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -238,7 +237,11 @@ async function submit(): Promise<void> {
           <DialogTitle>
             {{ mode === "create" ? `新建${spec.singular}` : `编辑${spec.singular}` }}
           </DialogTitle>
-          <DialogDescription>{{ spec.subtitle }}</DialogDescription>
+          <!-- 空描述：reka-ui 要求要么有描述、要么显式声明没有，而 Vue 的
+               attr 传不了它认的 `undefined`。留一个空的、仅屏幕阅读器可见
+               的槽位声明“无描述”——标题已经说了这个弹窗是什么。视觉上不
+               存在，也就不构成界面上的解释（见 principles 第 21 条）。 -->
+          <DialogDescription class="sr-only" />
         </DialogHeader>
 
         <div class="space-y-6">
@@ -335,7 +338,6 @@ async function submit(): Promise<void> {
                   @update:model-value="(value: string[]) => setField(field, value)"
                 />
 
-                <FieldDescription v-if="field.hint">{{ field.hint }}</FieldDescription>
                 <FieldError v-if="errors[field.key]">{{ errors[field.key] }}</FieldError>
               </Field>
             </FieldGroup>
