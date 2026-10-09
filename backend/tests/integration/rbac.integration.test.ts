@@ -503,6 +503,62 @@ describe.skipIf(!enabled)("book（真实 pg）", () => {
   });
 });
 
+describe.skipIf(!enabled)("auth（真实 pg）", () => {
+  afterAll(async () => {
+    await pool.query("DELETE FROM sys_user WHERE email LIKE 'it-%@example.com'");
+    await pool.query("DELETE FROM sys_organization WHERE code LIKE 'IT-%' OR code LIKE 'ORG-%'");
+  });
+
+  const EMAIL = `it-login-${STAMP}@example.com`;
+  const PASSWORD = "secret123";
+
+  /** 建一个能登录的用户。组织是必填列，所以先有一个。 */
+  async function makeUser() {
+    const org = await json<{ id: string }>(
+      await send("/rbac/organizations", "POST", {
+        name: "IT-登录组织",
+        code: `IT-LOGIN-${STAMP}`,
+      }),
+    );
+    const created = await send("/rbac/users", "POST", {
+      name: "IT-登录用户",
+      email: EMAIL,
+      password: PASSWORD,
+      organizationId: org.id,
+    });
+    expect(created.status).toBe(201);
+    return json<{ id: string }>(created);
+  }
+
+  it("login：正确凭据拿到本人，响应里没有哈希", async () => {
+    await makeUser();
+
+    const response = await send("/auth/login", "POST", { email: EMAIL, password: PASSWORD });
+    expect(response.status).toBe(200);
+
+    const session = await json<Record<string, unknown>>(response);
+    expect(session).toMatchObject({ name: "IT-登录用户", email: EMAIL });
+    // 字段集合本身就是要断言的东西：多一个 pwdHash 就是泄了口令。
+    expect(Object.keys(session).sort()).toEqual(["email", "id", "name"]);
+  });
+
+  it("login：口令不对与邮箱不存在是同一种失败", async () => {
+    const wrongPassword = await send("/auth/login", "POST", {
+      email: EMAIL,
+      password: "wrong-password",
+    });
+    const noSuchUser = await send("/auth/login", "POST", {
+      email: `it-nobody-${STAMP}@example.com`,
+      password: PASSWORD,
+    });
+
+    expect(wrongPassword.status).toBe(401);
+    expect(noSuchUser.status).toBe(401);
+    // 响应体必须一模一样，否则匿名调用方可以拿它探测邮箱是否注册过。
+    expect(await wrongPassword.json()).toEqual(await noSuchUser.json());
+  });
+});
+
 /**
  * 池是全局单例，**整份文件只关一次**。
  *

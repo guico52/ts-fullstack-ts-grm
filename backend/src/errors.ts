@@ -7,6 +7,14 @@ export class ResourceNotFoundError extends Error {}
  */
 export class InvalidHierarchyError extends Error {}
 
+/**
+ * 领域层「凭据不对」。邮箱不在、口令不匹配都抛这个。
+ *
+ * **两种失败不分开报**：告诉调用方「邮箱存在但口令不对」等于把账号是否存在
+ * 送了出去。由 app.ts 映射为 401。
+ */
+export class InvalidCredentialsError extends Error {}
+
 export class DatabaseUnavailableError extends Error {}
 export class DatabaseAuthError extends Error {}
 export class DatabaseConflictError extends Error {}

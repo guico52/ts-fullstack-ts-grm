@@ -8,7 +8,16 @@ applyPatches();
 export const SysUser = model("SysUser", "id", class {
   id = prop.i64().autoIncrement().asString();
   name = prop.text();
-  email = prop.text();
+  /**
+   * `str` 而不是 `text`。两者生成的 DDL **完全一样**（都是 `text`，不会产生
+   * 迁移），区别在运行时 scalarType：`prop.text()` 是 TEXT，在 ts-grm 里
+   * **根本不能参与 WHERE** —— 连 `email.eq(...)` 都会在建查询时抛
+   * `ARGUMENT_ERROR: Cannot create table prop ... TEXT`。
+   *
+   * 登录要按邮箱查人，所以它必须是 STR。参数 255 只声明意图，DDL 里不出现。
+   * 见 docs/constraints.md 第 9 节。
+   */
+  email = prop.str(255);
   pwdHash = prop.text();
   organization = prop.m2o(SysOrganization);
   audit = auditFields;

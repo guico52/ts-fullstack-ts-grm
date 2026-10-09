@@ -33,8 +33,12 @@ src/
 └── index.ts                   进程入口
 ```
 
-当前两个领域：`rbac`（org / user / view / role / permission）与 `book`
-（book / author / store）。
+当前三个领域：`rbac`（org / user / view / role / permission）、`book`
+（book / author / store）与 `auth`。
+
+**域里只有一个实体时不再套一层。** `modules/auth/` 直接把
+`model / repository / service / index` 四个文件放在域目录下 —— 域聚合层是为
+“一个域有多个 controller”准备的，为一个 endpoint 造三层目录只是形式。
 
 依赖方向单向前进，不允许反向或跨层：
 
@@ -187,6 +191,17 @@ export function rbacModule() {
 撞在一起。
 
 ## 6. 应用组装与错误处理
+
+### 认证：目前只有登录
+
+`POST /auth/login` 拿邮箱与口令换一份用户信息（`{ id, name, email }`）。
+
+**做了的：** 口令用 `Bun.password.verify` 比对；邮箱不存在与口令不匹配返回
+**逐字相同**的 401 —— 分开报等于把“这个邮箱注册过”送给任何人，而登录是匿名可调的。
+
+**没做的（有意）：** 没有 token、没有服务端会话、没有鉴权中间件，因此其他接口
+**不校验调用者是谁**；前端也没有路由守卫。要加的时候，签发写在 `auth/service.ts`，
+校验写成 `app.ts` 里挂在业务路由**之前**的一个插件；错误类型已在 `errors.ts` 就位。
 
 - `app.ts` 只做：全局插件（CORS）、全局错误处理、**挂载各域的聚合插件**；业务逻辑一行不写。
 - **`onError` 必须注册在 `.use(模块)` 之前**，否则插件路由里的异常会漏成框架默认响应。

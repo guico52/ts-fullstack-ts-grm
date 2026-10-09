@@ -84,6 +84,25 @@ describe("请求校验（不触达数据库）", () => {
     const response = await json("/rbac/permissions/1", "PATCH", {});
     expect(response.status).toBe(422);
   });
+
+  it("POST /auth/login 拒绝缺字段", async () => {
+    expect((await json("/auth/login", "POST", {})).status).toBe(422);
+    expect((await json("/auth/login", "POST", { email: "a@b.com" })).status).toBe(422);
+    expect((await json("/auth/login", "POST", { password: "secret123" })).status).toBe(422);
+  });
+
+  it("POST /auth/login 拒绝不像邮箱的 email", async () => {
+    const response = await json("/auth/login", "POST", {
+      email: "not-an-email",
+      password: "secret123",
+    });
+    expect(response.status).toBe(422);
+  });
+
+  it("POST /auth/login 拒绝过短的口令", async () => {
+    const response = await json("/auth/login", "POST", { email: "a@b.com", password: "123" });
+    expect(response.status).toBe(422);
+  });
 });
 
 describe("路由行为", () => {

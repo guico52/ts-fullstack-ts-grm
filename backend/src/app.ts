@@ -6,10 +6,12 @@ import {
   DatabaseConflictError,
   DatabaseReferenceError,
   DatabaseUnavailableError,
+  InvalidCredentialsError,
   InvalidHierarchyError,
   ResourceNotFoundError,
 } from "./errors.ts";
 import { ready } from "./model";
+import { authModule } from "./modules/auth";
 import { bookModule } from "./modules/book";
 import { rbacModule } from "./modules/rbac";
 
@@ -50,6 +52,11 @@ export function createApp() {
       if (error instanceof InvalidHierarchyError) {
         set.status = 422;
         return { message: error.message, code: "INVALID_HIERARCHY" };
+      }
+      // 凭据不对：匿名可调的接口，所以只回答“没进去”，不回答“为什么”。
+      if (error instanceof InvalidCredentialsError) {
+        set.status = 401;
+        return { message: error.message, code: "INVALID_CREDENTIALS" };
       }
       // 凭据被拒是配置错误，重试不会成功，必须和"暂时连不上"区分开。
       if (error instanceof DatabaseAuthError) {
@@ -92,6 +99,7 @@ export function createApp() {
     })
     .use(rbacModule())
     .use(bookModule())
+    .use(authModule())
 
   if (enableDocs) {
     app.use(
@@ -105,6 +113,7 @@ export function createApp() {
           },
           tags: [
             { name: "health", description: "健康检查" },
+            { name: "auth", description: "登录" },
             { name: "rbac", description: "权限管理" },
             { name: "book", description: "图书管理" },
           ],

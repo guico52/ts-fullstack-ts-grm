@@ -86,6 +86,8 @@ tests/                     单测；tests/integration/ 需真实库
 
 - `GET /health` —— 服务存活
 - `GET /health/db` —— 业务表可读性探针（不可用时 503）
+- `POST /auth/login` —— 邮箱 + 口令换用户信息（`{ id, name, email }`）。
+  **没有 token，也不拦其他接口**；未命中与口令不对回同样的 401。
 - `/rbac/organizations`、`/rbac/users`、`/rbac/views`、`/rbac/roles`、`/rbac/permissions`
 - `/book/books`、`/book/authors`、`/book/stores`
 
