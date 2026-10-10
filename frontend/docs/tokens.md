@@ -1,54 +1,38 @@
-# Tokens
+# 主题变量
 
-The values. All of them live in `src/assets/main.css`; nothing here is
-invented in a component.
+主题值集中在 `src/assets/main.css`，组件不自行定义一套颜色和尺寸。
 
-Two rules before the tables:
+- 不硬编码 `#2a78d6` 或 `bg-slate-100` 等颜色，表面和文字使用语义变量，以适配两种主题。
+- 不为单个页面增加近似重复的变量；优先复用已有值，避免调色板失去一致性。
 
-- **Never hard-code a colour.** Not `#2a78d6`, not `bg-slate-100`. Every
-  surface resolves through a semantic token so both themes keep working.
-- **Never add a token to fix one screen.** If an existing token is close,
-  use it. A fourteenth grey is how a palette rots.
+## 语义颜色
 
----
+以下变量在 `:root`（浅色）与 `.dark` 中定义，并通过 `@theme inline` 映射为工具类：
 
-## Semantic colours
+| 变量                   | 工具类                       | 用途                 |
+| ---------------------- | ---------------------------- | -------------------- |
+| `--background`         | `bg-background`              | 页面背景             |
+| `--foreground`         | `text-foreground`            | 默认文字             |
+| `--card`               | `bg-card`                    | 卡片、表格和弹窗表面 |
+| `--card-foreground`    | `text-card-foreground`       | 卡片文字             |
+| `--popover`            | `bg-popover`                 | 菜单、浮层与日历表面 |
+| `--primary`            | `bg-primary`、`text-primary` | 品牌强调色           |
+| `--primary-foreground` | `text-primary-foreground`    | 强调色表面上的文字   |
+| `--secondary`          | `bg-secondary`               | 次要控件填充         |
+| `--muted`              | `bg-muted`                   | 非活动填充与代码背景 |
+| `--muted-foreground`   | `text-muted-foreground`      | 提示、标签与附属信息 |
+| `--accent`             | `bg-accent`                  | 菜单行悬停填充       |
+| `--destructive`        | `text-destructive`           | 错误与删除操作       |
+| `--border`             | `border-border`              | 细边框               |
+| `--input`              | `border-input`               | 控件边框             |
+| `--ring`               | `ring-ring`                  | 焦点环               |
+| `--sidebar*`           | `bg-sidebar` 等              | 侧栏外壳             |
 
-Every one of these exists in `:root` (light) and `.dark`, and maps to a
-Tailwind utility through the `@theme inline` block.
+非主要内容的文字优先使用 `--muted-foreground`。深色模式的 `--border` 为 `oklch(1 0 0 / 8%)`，半透明边框能适应页面、卡片与浮层的不同背景。
 
-| Token                  | Utility                      | Used for                       |
-| ---------------------- | ---------------------------- | ------------------------------ |
-| `--background`         | `bg-background`              | Page surface                   |
-| `--foreground`         | `text-foreground`            | Default text                   |
-| `--card`               | `bg-card`                    | Panel, table, dialog surface   |
-| `--card-foreground`    | `text-card-foreground`       | Text on a card                 |
-| `--popover`            | `bg-popover`                 | Menus, popovers, calendar      |
-| `--primary`            | `bg-primary`, `text-primary` | Brand accent; one per app      |
-| `--primary-foreground` | `text-primary-foreground`    | Text on the accent             |
-| `--secondary`          | `bg-secondary`               | Quiet filled control           |
-| `--muted`              | `bg-muted`                   | Inactive fill, code background |
-| `--muted-foreground`   | `text-muted-foreground`      | Hints, labels, meta            |
-| `--accent`             | `bg-accent`                  | Hover fill for menu rows       |
-| `--destructive`        | `text-destructive`           | Errors, delete                 |
-| `--border`             | `border-border`              | Every hairline                 |
-| `--input`              | `border-input`               | Control borders                |
-| `--ring`               | `ring-ring`                  | Focus ring                     |
-| `--sidebar*`           | `bg-sidebar`, …              | The shell chrome               |
+## 品牌强调色
 
-**The two that carry the most weight:**
-
-- `--muted-foreground` — if a piece of text is not primary content, this is
-  its colour. Roughly a third of the app's text uses it.
-- `--border` — in dark mode this is `oklch(1 0 0 / 8%)`, a translucent white.
-  That is deliberate: a page, a card and a popover sit on different surfaces,
-  and one opaque grey could not serve all three.
-
----
-
-## The brand accent
-
-The accent is not a palette. It is three numbers:
+强调色由明度、色度和色相三个值决定：
 
 ```css
 :root {
@@ -59,14 +43,14 @@ The accent is not a palette. It is three numbers:
 }
 ```
 
-Everything else is derived:
+其他状态从它们派生：
 
 ```css
 --primary-glow: oklch(var(--brand-l) var(--brand-c) var(--brand-h) / 15%);
 --accent: oklch(0.93 calc(var(--brand-c) * 0.2) var(--brand-h));
 ```
 
-Switching accents rewrites the three numbers via `[data-accent]` on `<html>`:
+切换强调色时，通过 `<html>` 的 `data-accent` 属性覆盖三个变量：
 
 ```css
 [data-accent="green"] {
@@ -80,24 +64,21 @@ Switching accents rewrites the three numbers via `[data-accent]` on `<html>`:
 }
 ```
 
-Teal is the default and carries **no attribute**, but its CSS rule still
-exists — a scoped preview (the picker's swatches) needs something to resolve
-against, and without it the swatch inherits whatever accent is active.
+默认青绿色不在根元素设置属性，但仍保留相应 CSS 选择器，供颜色选择器的局部预览使用；否则预览会错误继承当前强调色。
 
-### Adding a fourth accent — three edits
+### 添加强调色
 
-1. `ACCENTS` in `src/lib/accent.ts`
-2. A light **and** dark CSS block in `src/assets/main.css`
-3. The two `index.html` lines in the anti-flash script
+同步修改三个位置：
 
-A guard fails if you miss the CSS blocks or the inline script. `ACCENT_LABELS`
-in `src/lib/accent.ts` is a `Record<Accent, string>`, so a missing label is a
-type error.
+1. `src/lib/accent.ts` 的 `ACCENTS` 和 `ACCENT_LABELS`。
+2. `src/assets/main.css` 的浅色与深色定义。
+3. `index.html` 防闪烁脚本中的允许值。
 
-### Reading the accent outside CSS
+检查验证 CSS 和内联脚本一致性。`ACCENT_LABELS` 使用 `Record<Accent, string>`，遗漏标签会产生类型错误。
 
-Components that need the raw colour (swatches) write it directly, because
-`--primary` is composed on `<html>` and would not pick up a scoped override:
+### 局部颜色预览
+
+`--primary` 在根元素组合，局部覆盖品牌变量时，直接使用三个值绘制预览：
 
 ```vue
 <span
@@ -106,15 +87,11 @@ Components that need the raw colour (swatches) write it directly, because
 />
 ```
 
----
+## 图表颜色
 
-## Chart colours
+`--chart-1` 至 `--chart-5` 与品牌强调色独立，用户切换强调色不应改变图表序列颜色。
 
-`--chart-1` … `--chart-5`. Categorical, **deliberately separate from the
-brand accent** — a chart series must not change colour when the user picks a
-different accent.
-
-| Slot | Light     | Dark      |
+| 序号 | 浅色      | 深色      |
 | ---- | --------- | --------- |
 | 1    | `#2a78d6` | `#00a9a6` |
 | 2    | `#1baf7a` | `#00a764` |
@@ -122,74 +99,49 @@ different accent.
 | 4    | `#008300` | `#9e64ee` |
 | 5    | `#4a3aa7` | `#e9523f` |
 
-**Assign in order and never cycle.** Adjacent-pair separation is only
-validated for slots used in sequence; skipping around is not checked.
+按顺序使用，不循环复用。已有相邻色区分检查以顺序使用为前提，不保证任意跳选组合。
 
-`--chart-3` is below 3:1 on a white card. Any multi-series chart must
-therefore carry a legend or a table view — **colour is never the only
-channel carrying information.**
+`--chart-3` 在白色卡片上的对比度低于 3:1。多序列图表必须提供图例或表格，不能只靠颜色传达信息。
 
-当前没有图表页面。将来增加 canvas 图表时，从 document 的 computed style 读取 token，绘制库不能直接解析 CSS var()；颜色、字体和主题更新需单独处理。
-多序列图表按顺序使用这些颜色，保留图例或表格，不能只用颜色传达信息。
+当前没有图表页面。将来增加画布图表时，从文档的计算样式读取变量；绘图库通常不能直接解析 CSS `var()`，颜色、字体和主题变化需要显式处理。
 
----
+## 字体与字号
 
-## Typography
+正文使用 `--font-sans`，即 Inter Variable；技术值使用系统等宽字体 `font-mono`。
 
-Two families:
-
-- `--font-sans` — Inter Variable. Everything.
-- `font-mono` — the system stack. Technical values only (rule 8).
-
-Two rules hold the scale together: **nothing renders below 14px**, and
-**key text starts at 16px**.
+字号不低于 14px，关键文字从 16px 起：
 
 ```css
-/* main.css — the floor is a token override, so every `text-xs` inherits it */
---text-xs: 0.875rem; /* 14px, not Tailwind's 12px */
+/* main.css 统一覆盖字号，所有 text-xs 继承此值。 */
+--text-xs: 0.875rem; /* 14px */
 ```
 
-| Size        | Used for                                                               |
-| ----------- | ---------------------------------------------------------------------- |
-| `text-2xl`  | Metric card value, donut total                                         |
-| `text-xl`   | The page `<h1>` (via `PageHeader`)                                     |
-| `text-lg`   | The topbar's company name (sm and up), dialog titles                   |
-| `text-base` | Key text: card and section labels, the brand, nav items, table headers |
-| `text-sm`   | Body, table cells, control text, page subtitle                         |
-| `text-xs`   | Hints, meta, row actions — the floor, 14px                             |
+| 工具类      | 用途                                       |
+| ----------- | ------------------------------------------ |
+| `text-2xl`  | 指标卡数值等重点数据                       |
+| `text-xl`   | `PageHeader` 提供的页面主标题              |
+| `text-lg`   | 较宽屏幕的顶栏公司名、弹窗标题             |
+| `text-base` | 卡片与分区标签、品牌、导航、表头等关键文字 |
+| `text-sm`   | 正文、单元格、控件文字与页面副标题         |
+| `text-xs`   | 提示、附属信息、行操作，仍为 14px          |
 
-No literal below the floor is shipped, and the guard rejects one that is
-(`text-[11px]` is how this table used to be spelled).
+检查拒绝 `text-[11px]` 等低于下限的字面值。
 
-Tracking is not decorative:
+标题使用 `tracking-[-0.01em]`，卡片与分区标签使用 `tracking-[0.08em]`。新增字号或字距前先判断内容层级是否确实变化，不为装饰增加一套尺度。
 
-- `tracking-[-0.01em]` — headings. Keeps a 20px heading from looking loose
-  next to 14px text.
-- `tracking-[0.08em]` — uppercase card and section labels.
-- `tracking-[0.12em]` — the sidebar tagline.
-
-**Rule of thumb:** if you are reaching for a new size, check whether the
-content actually changed rank. New sizes are the main way a type scale
-becomes noise.
-
----
-
-## Shape
+## 圆角
 
 ```css
---radius: 0.625rem; /* 10px — the one number */
+--radius: 0.625rem; /* 10px */
 --radius-sm: calc(var(--radius) - 4px);
 --radius-md: calc(var(--radius) - 2px);
 --radius-lg: var(--radius);
 --radius-xl: calc(var(--radius) + 4px);
 ```
 
-Convention: **`rounded-md` for controls, `rounded-xl` for surfaces.**
-(53 uses of `md` vs 11 of `xl` in the React original.)
+控件通常使用 `rounded-md`，表面使用 `rounded-xl`，从统一变量派生。
 
----
-
-## Depth
+## 层次与阴影
 
 ```css
 :root {
@@ -200,14 +152,11 @@ Convention: **`rounded-md` for controls, `rounded-xl` for surfaces.**
 }
 ```
 
-There is **one** shadow. It is switched off in dark mode; hairlines carry
-depth there instead (principle 9).
+卡片阴影统一，深色模式关闭阴影，通过细边框表达层次。
 
----
+## 玻璃表面
 
-## Glass
-
-A reusable recipe for overlays, sticky headers and toasts:
+浮层、固定标题和通知可复用 `surface-glass`：
 
 ```css
 background: color-mix(in oklab, var(--background) 85%, transparent);
@@ -216,65 +165,40 @@ border: 1px solid var(--border);
 border-radius: var(--radius);
 ```
 
-Exposed as the `surface-glass` utility in `main.css`.
+`color-mix` 跟随背景主题，浅色下为半透明白色，深色下为半透明深色，无需固定 `rgba`。
 
-**Why `color-mix` and not a fixed `rgba`:** it has to follow the theme. Light
-mode gets a translucent white, dark mode a translucent deep blue, from one
-declaration.
+## 特殊取色规则
 
----
+颜色预览的轮廓允许使用 `ring-black/10 dark:ring-white/15`。预览可能呈现任意强调色，针对应用表面调整的 `ring-border` 无法保证在所有饱和色上可见，因此这里允许黑白半透明轮廓。
 
-## The two sanctioned exceptions
+危险色表面的文字使用 `text-destructive-foreground`，不使用 `text-white`，以便危险色定义调整后前景仍保持一致。这是语义变量的正常使用。
 
-Everything else in this document is a rule. These two are deliberate
-departures, and both are here so nobody has to re-litigate them:
+## 动画
 
-**A swatch outline may use `ring-black/10 dark:ring-white/15`.**
+| 类名                                           | 用途                                        |
+| ---------------------------------------------- | ------------------------------------------- |
+| `transition-colors duration-200`               | 悬停和导航状态变化                          |
+| `transition-all duration-200`                  | 侧栏宽度变化                                |
+| `animate-in fade-in-0 zoom-in-95 duration-500` | 进入动画，配合 `motion-reduce:animate-none` |
+| `animate-spin`                                 | 仅用于加载指示                              |
 
-The accent swatches render an _arbitrary_ brand colour, and their outline
-has to stay visible over any of them. `ring-border` is a token tuned for
-the app's own surfaces; against a saturated swatch it disappears. A
-translucent black (light) or white (dark) hairline is the only thing that
-works for every colour the picker can produce.
+悬停过渡通常不超过 200ms，运动尊重 `prefers-reduced-motion`。
 
-**A destructive surface takes `text-destructive-foreground`.**
+## 滚动条
 
-It is a token, not `text-white`, so a future change to what "destructive"
-looks like does not leave a hard-coded foreground behind. It exists
-precisely so the token rule can hold without an exception here.
-
----
-
-## Motion
-
-- `transition-colors duration-200` — hover, navigation states
-- `transition-all duration-200` — the sidebar width
-- `animate-in fade-in-0 zoom-in-95 duration-500` — entry, always with
-  `motion-reduce:animate-none`
-- `animate-spin` — loading spinners only
-
-Anything longer than 200ms on a hover starts to feel laggy; anything that
-moves must respect `prefers-reduced-motion`.
-
----
-
-## Scrollbars
-
-Custom, in `main.css`, following the theme:
+滚动条在 `main.css` 定义并跟随主题：
 
 ```css
 ::-webkit-scrollbar-thumb {
   background-color: color-mix(in oklab, var(--muted-foreground) 38%, transparent);
   border: 2px solid transparent;
-  background-clip: padding-box; /* 10px track, 6px thumb, real grab target */
+  background-clip: padding-box; /* 10px 轨道、6px 滑块，保留可拖动区域。 */
 }
 @supports not selector(::-webkit-scrollbar) {
   * {
     scrollbar-width: thin;
-  } /* Firefox only */
+  } /* 适用于不支持该伪元素的浏览器，例如 Firefox。 */
 }
 ```
 
-The colour is written inline rather than hoisted into a token, because
-`var()` in a custom property resolves where it is declared — that way it
-always resolves against the scrolling element's own theme.
+颜色表达式在滚动元素处计算，不提前提取到另一处组合变量，避免局部主题覆盖失效。

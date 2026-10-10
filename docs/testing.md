@@ -10,9 +10,9 @@ cd ..
 bun run check
 ```
 
-根 check 覆盖两端 typecheck / 单测，以及前端 Prettier、ESLint、构建和 mock API 浏览器测试。
-mock 浏览器测试使用测试会话和可达集合，不依赖数据库。gotoPage 验证页面标题，避免在登录或 404 页面上误通过。
-默认 preview 端口 4173，占用时用 PLAYWRIGHT_PORT=4175 bun run check。
+根目录完整检查覆盖两端类型检查与单元测试，以及前端 Prettier、ESLint、构建和模拟接口浏览器测试。
+模拟接口浏览器测试使用测试会话和可达集合，不依赖数据库。gotoPage 验证页面标题，避免在登录或 404 页面上误通过。
+默认预览服务端口 4173，占用时用 PLAYWRIGHT_PORT=4175 bun run check。
 
 ## 真实数据库与全栈流程
 
@@ -33,11 +33,11 @@ bun run test:e2e
 podman stop template-test-pg
 ```
 
-集成测试自动创建管理员和 seed，不依赖此前启动过服务；测试请求直接走 app.handle。
-E2E 自行启动真实后端和前端，验证管理员登录、系统页面可达、换账号、观察者无写操作入口及服务端 403。
+集成测试自动创建管理员和默认数据，不依赖此前启动过服务；测试请求直接走 app.handle。
+全栈浏览器测试自行启动真实后端和前端，验证管理员登录、系统页面可达、换账号、观察者无写操作入口及服务端 403。
 端口默认后端 3015、前端 4185，可用 E2E_BACKEND_PORT / E2E_FRONTEND_PORT 覆盖。
-E2E 按自己的 VITE_API_URL 重新构建 dist；之后开发或发布应重新按目标配置构建。
+全栈浏览器测试按自己的 VITE_API_URL 重新构建 dist；之后开发或发布应重新按目标配置构建。
 
-mock trace 在失败时保留于 frontend/test-results/；真实全栈 trace 独立保留于 frontend/smoke-artifacts/fullstack/，防止两套测试互相清理产物。
+模拟接口测试的跟踪记录在失败时保留于 frontend/test-results/；真实全栈测试的跟踪记录独立保留于 frontend/smoke-artifacts/fullstack/，防止两套测试互相清理产物。
 
-E2E 使用独立的 smoke-artifacts/fullstack-dist 构建目录，避免覆盖日常 build 和 mock 浏览器测试使用的 dist。密码流程详见[密码管理](./passwords.md)。
+全栈浏览器测试使用独立的 smoke-artifacts/fullstack-dist 构建目录，避免覆盖日常 build 和模拟接口浏览器测试使用的 dist。密码流程详见[密码管理](./passwords.md)。

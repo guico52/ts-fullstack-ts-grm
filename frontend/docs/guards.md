@@ -1,42 +1,34 @@
-# Guards
+# 规则检查
 
-Conventions that live only in a README decay. Every rule in
-[principles.md](./principles.md) that could be checked mechanically _is_
-checked mechanically, and the build fails when it is broken.
+只存在于文档中的规则容易失效。项目对可以自动判断的规则提供源码、语法树、渲染和浏览器检查；具体覆盖边界见[项目约束](./constraints.md)，不代表所有设计规则都已自动检查。
 
 ```bash
-bun run test        # all guards + rules + interactions
+bun run test # 规则、纯逻辑和组件交互测试
 ```
 
-A failing guard names the offending file:
+检查失败时应指出违规文件，例如：
 
-```
+```text
 AssertionError: expected [ 'views/BadView.vue' ] to deeply equal []
 ```
 
----
+## 检查位置
 
-## Where they are
+| 文件                            | 检查层次                               |
+| ------------------------------- | -------------------------------------- |
+| `src/lib/design-system.test.ts` | 源码扫描、单文件组件语法树和服务端渲染 |
+| `src/lib/*.test.ts`             | 纯逻辑                                 |
+| `src/components/**/*.test.ts`   | 使用 happy-dom 的组件交互              |
+| `eslint.config.js`              | 无键的 `v-for`、`v-html` 等模板问题    |
+| `tests/browser/`                | 真实浏览器中的布局、交互和页面流程     |
 
-| File                            | Layer                                                                  |
-| ------------------------------- | ---------------------------------------------------------------------- |
-| `src/lib/design-system.test.ts` | Source scanning, SFC AST, SSR rendering                                |
-| `src/lib/*.test.ts`             | Pure rules                                                             |
-| `src/components/**/*.test.ts`   | Interactions (happy-dom, per-file)                                     |
-| `eslint.config.js`              | Template mistakes: `v-for` without a key, `v-html`, `flat/recommended` |
+设计规范检查在没有 DOM 的 Node 环境运行，读取文件和服务端渲染都不需要浏览器，便于快速执行。
 
-The design-system guards run in **node with no DOM** — deliberately. They
-read files and server-render; neither needs a browser, and a fast guard is
-one that actually runs.
+## 三种检查技术
 
----
+### 1. 源码扫描
 
-## Three techniques
-
-### 1. Source scanning
-
-Read `.vue` files and assert with regex. Framework agnostic, and enough for
-"does every view import PageHeader".
+读取 `.vue` 文件，用正则检查简单结构，例如页面是否导入 `PageHeader`：
 
 ```ts
 const offenders = vueSources("views")
@@ -45,44 +37,36 @@ const offenders = vueSources("views")
 expect(offenders).toEqual([])
 ```
 
-**Always assert the offender list is empty, not that the count is small.**
-The failure message then names the file, which is the entire value.
+断言违规文件列表为空，不只断言数量；失败时直接显示文件名。
 
-### 2. SFC AST
+### 2. 单文件组件语法树
 
-`@vue/compiler-sfc`'s `parse()` gives a real template AST. This is where
-regex breaks down:
+复杂模板使用 `@vue/compiler-sfc` 的解析结果，区分真实标签、注释和字符串：
 
 ```vue
 <template>
-  <!-- <h2>commented out</h2> -->
-  <p>{{ "<h2>inside a string</h2>" }}</p>
-  <CardTitle>Real component</CardTitle>
+  <!-- <h2>已注释的标题</h2> -->
+  <p>{{ "<h2>字符串中的标题</h2>" }}</p>
+  <CardTitle>真实组件</CardTitle>
 </template>
 ```
 
-A regex reports three `<h2>`-ish hits. The AST reports
-`["section", "p", "CardTitle"]` and can tell a component from a DOM tag.
+正则容易将注释和字符串误判为元素，语法树只遍历真实节点，并区分组件与 DOM 标签。遍历回调使用解析器对应的节点类型，不用 `any` 或 `unknown` 代替。
 
-### 3. Server rendering
+### 3. 服务端渲染
 
-`@vue/server-renderer`'s `renderToString` turns a component into HTML you
-can assert on. This catches what source scanning cannot — an
-`aria-labelledby` that no longer points at the heading it claims to.
+`@vue/server-renderer` 的 `renderToString` 将组件渲染为 HTML，可检查源码扫描无法证明的属性关联：
 
 ```ts
-const html = await renderToString(h(StatCard, { label: "Total", value: "12" }))
+const html = await renderToString(h(StatCard, { label: "总数", value: "12" }))
 expect(html).toContain("tabular-nums")
 ```
 
----
+例如检查 `aria-labelledby` 是否指向真实标题。
 
-## Putting it together: the type floor
+## 字号下限检查
 
-The type floor (nothing below 14px, key text from 16px) uses all three at
-once. The pixel value of every scale step is **read out of `main.css`**,
-every source file is scanned for a literal that resolves below the floor,
-and the key components are pinned so they cannot quietly drop a rank.
+检查从 `main.css` 读取字号尺度，再扫描源文件中的字号字面值，同时验证关键组件的字号层级：
 
 ```ts
 for (const match of read("assets/main.css").matchAll(/--text-(\w+):\s*([\d.]+)rem/g)) {
@@ -90,161 +74,95 @@ for (const match of read("assets/main.css").matchAll(/--text-(\w+):\s*([\d.]+)re
 }
 ```
 
-That is what makes the rule a mechanism instead of a comment: setting
-`--text-xs` back to 12px fails the check, so the floor lives in one place
-and the guard watches that place.
+将 `--text-xs` 改回 12px 会导致检查失败，确保字号下限由统一配置决定。当前没有图表页面或绘图库主题检查；将来增加画布图表时还需独立检查绘制字体。
 
-未来增加 canvas 图表时，需单独检查绘制字体；当前没有图表页面或 chart-theme 守卫。
+## 添加规则检查
 
----
-
-## Adding a guard
-
-Copy the shape:
+先验证检查确实匹配了目标，再列出违规文件：
 
 ```ts
-// ---------------------------------------------------------------------------
-describe("<the rule, in plain words>", () => {
-  it("the rule is actually watching something", () => {
-    // A guard that matches no file passes for the wrong reason and then
-    // quietly stops protecting anything. This assertion is not optional.
+describe("页面遵守指定规则", () => {
+  it("确实存在被检查的文件", () => {
     expect(vueSources("views").length).toBeGreaterThan(0)
   })
 
-  it("<what must be true>", () => {
+  it("没有违反规则的文件", () => {
     const offenders = vueSources("views")
-      .filter((v) => /* the violation */)
+      .filter((v) => /* 具体违规条件 */)
       .map((v) => v.path)
     expect(offenders).toEqual([])
   })
 })
 ```
 
-Then **verify it can fail.** Add a file that breaks the rule, run the tests,
-confirm the guard names it, delete the file. A guard you have never seen
-fail is a comment with extra steps.
+匹配不到文件时自动通过，会导致检查悄悄失去作用。新增检查后必须构造一个反例，确认它失败并指出文件，再清理临时文件：
 
 ```bash
-cat > src/views/TempBad.vue <<'EOF'
+cat > src/views/TempBad.vue <<'TEMP'
 <template><Table><TableBody /></Table></template>
-EOF
-bunx vitest run src/lib/design-system.test.ts   # must fail
-rm src/views/TempBad.vue
+TEMP
+bunx vitest run src/lib/design-system.test.ts # 应当失败。
+gio trash src/views/TempBad.vue
 ```
 
----
+## 常见问题
 
-## Known traps
-
-All of these were found by running the tests, not by thinking about them.
-
-**`renderToString` is async.** Every render assertion needs `await`. React's
-`renderToStaticMarkup` is synchronous; this is not.
-
-**Slot content is wrapped in comment markers.** Assert:
+- `renderToString` 是异步函数，每次渲染断言都要 `await`。
+- 插槽内容可能包含注释标记，匹配标题时允许中间存在标记，不断言完全相邻的字符串。
+- 依赖注入上下文的组件需要相应提供者，例如含 `Tooltip` 的测试树要包裹 `TooltipProvider`。
+- 弹窗内容通过传送机制进入 `document.body`，不要只在挂载包装器内查找。
+- 测试取得的 store 和挂载组件树使用同一个 Pinia 实例，不能依赖两份初始数据碰巧相同。
+- 压缩产物可能只有一行，统计出现次数使用 `rg -o … | wc -l`。
 
 ```ts
-expect(html).toMatch(/<h2[^>]*>[\s\S]*?Overview[\s\S]*?<\/h2>/)
-```
-
-not `toContain("<h2>Overview</h2>")`.
-
-**A component that injects a context needs its provider in the test tree.**
-Mounting `OrganizationsView` alone fails with
-`Injection Symbol(TooltipProviderContext) not found`, because the row actions
-are wrapped in `Tooltip`. Wrap it:
-
-```ts
+expect(html).toMatch(/<h2[^>]*>[\s\S]*?总览[\s\S]*?<\/h2>/)
 mount({ render: () => h(TooltipProvider, null, { default: () => h(OrganizationsView) }) })
 ```
 
-**Dialogs teleport.** Assert their content on `document.body`, where it
-actually lands, not inside the wrapper.
+## 第四层：真实浏览器
 
-**Use one pinia instance** for both the test's store handle and the mounted
-tree. Two instances pass by accident on identical seed data.
-
-**`grep -c` counts lines, and a minified bundle is one line.** Use
-`grep -o … | wc -l` when counting occurrences in `dist/`.
-
----
-
-## Layer 4: the browser
-
-`tests/browser/` runs in a real browser via Playwright. This is the only
-layer that can see layout, and it is where the overflow rule (principle 14)
-lives.
+`tests/browser/` 通过 Playwright 驱动真实浏览器，是验证布局的测试层：
 
 ```bash
-bun run test:browser        # builds, serves, and drives Chromium
-bun run test:browser:run    # uses an existing dist/; useful for test-only edits
+bun run test:browser     # 构建、预览并运行 Chromium 检查。
+bun run test:browser:run # 使用已有 dist/，适合只修改测试的迭代。
 ```
 
-Browser cases run independently with four workers locally and two on CI.
-The preview server serves static assets; stores and localStorage are isolated
-in each test's browser context. See [Playwright isolation](https://playwright.dev/docs/browser-contexts).
+本地使用四个工作进程，设置持续集成环境时配置为两个；仓库本身不提供持续集成配置。每个测试使用独立浏览器上下文，隔离会话、存储与模拟接口状态。
+@see [Playwright 浏览器上下文隔离](https://playwright.dev/docs/browser-contexts)
 
-Use `gotoPage` from `tests/browser/helpers.ts` before inspecting the DOM or
-measuring layout. It waits for the route heading, fonts and a rendering frame.
-Do not use `networkidle`: it adds a 500ms quiet period to every navigation and
-does not express whether the UI is ready. See
-[Playwright load states](https://playwright.dev/docs/api/class-page#page-wait-for-load-state).
-Hover checks await finite animations with `settleTransitions`, then compare
-their final styles; fixed sleeps can measure mid-transition or waste time.
+检查 DOM 或测量布局前使用 `tests/browser/helpers.ts` 的 `gotoPage`，等待路由标题、字体和渲染帧。不要使用 `networkidle` 代替界面就绪；它会额外等待网络静默，不能证明目标控件已经可用。
+@see [Playwright 加载状态](https://playwright.dev/docs/api/class-page#page-wait-for-load-state)
 
-Component tests unmount their wrappers after each case. The pagination test
-that removes rows uses fake timers to advance the demo store's 400ms latency,
-while still awaiting each write. Browser lifecycle tests retain real latency
-to verify controls during an in-flight request.
+悬停检查通过 `settleTransitions` 等待有限动画完成，再比较最终样式；固定延时可能测到过渡中间状态，也可能无必要地等待。
 
-The overflow check walks every element on the page and reports anything
-whose right edge crosses the viewport:
+组件测试每例结束卸载包装器。只有需要推进模拟延迟的用例使用虚拟计时器，异步写入仍要等待；浏览器异步生命周期用例保留真实延迟，检查请求期间的控件状态。
 
-- `position: fixed` and portal content (tooltips, popovers, toasts,
-  dialogs) are skipped — they are allowed to sit anywhere.
-- Content inside a horizontally scrollable ancestor is skipped: a wide
-  table is _meant_ to be wider than its box. The box itself is still
-  measured, so a scroll container that escapes the viewport is caught.
-- 1px helpers (`sr-only`) and hidden elements are skipped.
+### 横向溢出
 
-End-to-end flows live here too (`tests/browser/resource-list.spec.ts`): create,
-edit and delete through the real UI. They exist because a component test can
-prove a dialog opens and a validator returns an error map, and still miss a
-submit handler that throws before it adds anything.
+检查遍历元素，报告右边缘越过视口的对象，并明确排除：
 
-`tests/browser/interaction.spec.ts` covers affordance: every interactive
-control's computed cursor, and whether it visibly changes on hover. Neither
-signal exists in a component test — happy-dom computes no styles, cascades
-nothing and has no cursor.
+- 固定定位和传送浮层内容，如提示、菜单、通知和弹窗。
+- 横向滚动容器内部允许超宽的内容；容器本身仍检查。
+- 1px 辅助元素，如 `sr-only`，以及隐藏元素。
 
-The CSS rule that satisfies it lives in `main.css` under `@layer base`, not
-in the components. That is deliberate: a primitive pulled from the registry
-later cannot forget it, and the base layer still loses to a utility, so
-`cursor-default` wins on the rare element where a hand is wrong.
+因此该检查主要验证页面内容，不能用它宣称所有浮层在任意位置都正确。
 
-**Calibrate the detector against a real failure.** Disable a fix, watch the
-test go red, put it back. A layout or affordance assertion you have never
-seen fail might be measuring nothing. Reverting the cursor rule fails all
-five pages with counts per page, which is how you know it is looking.
+### 操作流程与反馈
 
----
+`tests/browser/resource-list.spec.ts` 通过实际界面验证创建、编辑和删除。模拟接口的浏览器流程覆盖前端交互，真实后端流程单独位于 `tests/fullstack/`，配置见[测试指南](../../docs/testing.md)。
 
-## What is _not_ guarded
+`tests/browser/interaction.spec.ts` 检查交互控件的计算光标与悬停样式，happy-dom 没有真实 CSS 布局和计算能力，不能替代这些检查。
 
-Being honest about the gaps is part of the design:
+光标规则位于 `main.css` 的基础层，新增组件自动继承；确有需要时仍可通过工具类覆盖。验证检查时可临时移除规则，确认测试报告具体失败，随后恢复，避免检查实际没有测量目标。
 
-- **Arbitrary colour values.** A guard rejects `text-white` / `text-black`,
-  but nothing stops `bg-red-500` or every other literal in a component.
-  A general stylelint pass is not present.
-- **Where a size is used, not just which ones exist.** The floor is
-  guarded — no scale step below 14px, no literal below it, key files must
-  offer a 16px step — but nothing stops `text-xl` appearing where `text-lg`
-  was meant.
-- **Visual regressions.** No screenshot diffing. Overflow and hover
-  affordance are checked; a colour that shifted by two degrees is not.
-- **Component behaviour** beyond what the interaction tests in
-  `src/components/**` and the flows in `tests/browser/**` happen to cover.
-- **Vertical overflow** — a page may scroll down as far as it likes. Only
-  the horizontal axis is constrained.
+## 尚未自动覆盖的范围
 
-If you add one of these, document it here so the list stays true.
+- 任意硬编码颜色：当前拒绝部分黑白文字类，但没有完整的样式检查器阻止全部字面色。
+- 每处字号是否符合语义层级：下限和关键组件受检查，所有调用位置仍需审查。
+- 截图视觉回归：当前没有截图差异比较。
+- 未包含在已有交互和流程测试中的组件行为。
+- 页面纵向长度：页面允许向下滚动，主要溢出检查约束横轴。
+- 每处 `unknown` 是否必要，以及外部数据验证是否充分：由类型约束和人工审查共同保证。
+
+新增覆盖后同步维护本文件，避免宣称检查范围超出实际实现。

@@ -14,14 +14,14 @@
 
 ### 类型约束
 
-- 内部数据、数据库投影、插件实例、上下文和回调必须有对应的类型。优先从模型、schema、已定义变量和框架类型推导；推导准确时不要求重复标注，也不另写一份重复的接口定义。
+- 内部数据、数据库投影、插件实例、上下文和回调必须有对应的类型。优先从模型、校验模型、已定义变量和框架类型推导；推导准确时不要求重复标注，也不另写一份重复的接口定义。
 - 导出需要复用的变量类型，例如 `src/plugins/auth.ts` 的 `AuthGuardType = typeof authGuard`；上下文从 `InferContext<AuthGuardType>` 派生。插件实例与请求校验回调是不同的类型，`PermissionCatalog` 的 `permissionCheck` 使用对应的 `PermissionCheck`，不能用 `unknown` 代替。
-- 请求体类型由 Elysia schema 推导，查询结果由 ts-grm 投影推导；原生 `pg` 查询需要定义对应结果类型。新增字段、钩子或返回值时同步维护类型，不把已知结构写成 `any`、`unknown` 或宽泛的 `Record<string, unknown>`。
+- 请求体类型由 Elysia 校验模型推导，查询结果由 ts-grm 投影推导；原生 `pg` 查询需要定义对应结果类型。新增字段、钩子或返回值时同步维护类型，不把已知结构写成 `any`、`unknown` 或宽泛的 `Record<string, unknown>`。
 - 非必要情况下禁止使用 `any`、`unknown`。不能为了消除类型错误把 `any` 换成 `unknown`，也不能通过 `as any`、`as never`、`as unknown as T` 或类型检查抑制绕过约束；应修正类型来源、收窄联合类型或完善适配器。
-- `unknown` 仅用于确实无法预知结构的边界，例如未经验证的 JSON、捕获的异常和外部库返回值。使用处须说明边界原因，通过 schema、类型守卫或属性检查完成验证和收窄，再传入内部业务代码；类型断言不能代替验证。
+- `unknown` 仅用于确实无法预知结构的边界，例如未经验证的 JSON、捕获的异常和外部库返回值。使用处须说明边界原因，通过校验模型、类型守卫或属性检查完成验证和收窄，再传入内部业务代码；类型断言不能代替验证。
 - `any` 仅在第三方类型缺陷等无法合理消除的限制下允许局部例外，须在使用处说明原因和影响范围，封装后向业务层提供具体类型。
 - 泛型用于保留真实的输入与输出关系，不作为逃避类型建模的替代品。测试故意传入非法数据时，可局部使用附有原因的 `@ts-expect-error`，同时验证静态拒绝与运行时处理；生产代码不得照搬。
-- TypeScript 检查不能证明每处 `unknown` 都必要；上述必要性、验证是否充分及例外范围由 code review 审查。
+- TypeScript 检查不能证明每处 `unknown` 都必要；上述必要性、验证是否充分及例外范围由代码审查判断。
 
 ## 2. 目录与分层
 
@@ -33,12 +33,12 @@ src/
 │   ├── rbac/index.ts          按领域分的模型文件
 │   └── book/index.ts          一个领域一个文件
 ├── modules/<领域>/            业务模块，一个领域一个目录
-│   ├── index.ts               域聚合：把该域的 controller 合成一个插件
+│   ├── index.ts               域聚合：把该域的路由控制器合成一个插件
 │   └── <实体>/
-│       ├── model.ts           校验 schema
+│       ├── model.ts           校验模型
 │       ├── repository.ts      读 ts-grm / 写原生 pg
 │       ├── service.ts         业务规则
-│       └── index.ts           Elysia controller
+│       └── index.ts           Elysia 路由控制器
 ├── plugins/                   跨领域的自定义 Elysia 插件（与 modules 同级）
 ├── errors.ts                  领域错误 + SQLSTATE 分类
 ├── app.ts                     组装：插件 + 错误处理 + 挂模块
@@ -50,14 +50,14 @@ src/
 
 **域里只有一个实体时不再套一层。** `modules/auth/` 直接把
 `model / repository / service / index` 四个文件放在域目录下 —— 域聚合层是为
-“一个域有多个 controller”准备的，为一个 endpoint 造三层目录只是形式。
+“一个域有多个路由控制器”准备的，为一个接口造三层目录只是形式。
 
 依赖方向单向前进，不允许反向或跨层：
 
 ```
 index → service → repository → model/index（client、事务）
   ↘        ↓           ↓
-       model.ts（schema 与类型）
+       model.ts（校验模型与类型）
 ```
 
 - ❌ `service` / `index` 里出现 SQL、`import "pg"`、`import "@ts-grm/..."` 或 `Context`
@@ -67,7 +67,7 @@ index → service → repository → model/index（client、事务）
 
 ## 3. 模型与数据库入口（`src/model/`）
 
-- 模型是 schema 的**唯一来源**：查询投影与迁移 DDL 都由它推导，没有第二份 schema 文件。
+- 模型是数据库结构的**唯一来源**：查询投影与迁移 DDL 都由它推导，没有第二份结构定义文件。
 - 一个领域一个文件（如 `rbac/index.ts`），公共字段用嵌入组合（`audit = auditFields`）。
 - 每个定义模型的文件在顶部调用一次 `applyPatches()`——必须在 `model()`/`prop` **之前**。
 - **字符串列用 `prop.str(n)` 还是 `prop.text()`，只看一件事：这一列会不会被用来找某一行。**
@@ -78,7 +78,7 @@ index → service → repository → model/index（client、事务）
   | 只被读出来、在**应用层**处理（`pwd_hash` 交给 `Bun.password.verify`，`logo` 是个 URL） | `prop.text()` |
 
   保持 `text()` 的列要在模型里**逐列注明理由**——否则下一个人分不清那是设计还是漏改。
-  `n` 以对应 Elysia schema 的 `maxLength` 为准，让“能存多长”只有一处说法；
+  `n` 以对应 Elysia 校验模型的 `maxLength` 为准，让“能存多长”只有一处说法；
   它在 PostgreSQL 方言下不进 DDL，所以改这一条不产生迁移（第 9 节有完整解释）。
 
 ### `model/index.ts`
@@ -188,7 +188,7 @@ transaction(async (session) => {
 - `model.ts`：`Elysia.t` 定义并导出 `as const`，类型用 `UnwrapSchema` 推导，不另写 interface。
 - `repository.ts`：导出对象；读经 `run(...)` 包装（统一错误分类），写经 `transaction(...)`。
 - `service.ts`：业务规则；「不存在」抛 `ResourceNotFoundError`，不碰 Elysia。
-- `index.ts`：工厂函数返回 `new Elysia({ name, prefix })`；1 实例 = 1 controller；
+- `index.ts`：工厂函数返回 `new Elysia({ name, prefix })`；每个实例对应一个路由控制器；
   ❌ 不要把整个 `Context` 传进 service。
 
 ### 域聚合（`modules/<领域>/index.ts`）
@@ -204,7 +204,7 @@ export function rbacModule() {
 }
 ```
 
-`app.ts` 因此只挂**域**，不挂实体：新增一个实体的 controller 不会动 `app.ts`。
+`app.ts` 因此只挂**域**，不挂实体：新增一个实体的路由控制器不会动 `app.ts`。
 路由前缀是两段 —— `modules/book/book` 挂在 `/book/books`，`modules/book/store`
 挂在 `/book/stores`；文件名叫 `store` 而路由叫 `stores`，因为路由面对的是集合。
 
@@ -216,7 +216,7 @@ export function rbacModule() {
 
 ### 认证与授权
 
-`POST /auth/login` 拿邮箱与口令换 `{ id, name, email, mustChangePassword, token }`。token 是 JWT
+`POST /auth/login` 拿邮箱与口令换 `{ id, name, email, mustChangePassword, token }`。登录凭据为 JWT
 （`@elysiajs/jwt`，有效期 7 天，密钥来自 `JWT_SECRET`）。
 
 **做了的：**
@@ -225,15 +225,15 @@ export function rbacModule() {
   **逐字相同**的 401 —— 分开报等于把“这个邮箱注册过”送给任何人，而登录是匿名可调的。
 - 签发在**路由层**：`authService` 不认识 Elysia 上下文，也不该认识。
 - `JWT_SECRET` 在**生产环境缺失时启动就报错** —— 用公开默认值签发凭据，
-  等于谁都能伪造 token。开发环境允许缺省，但会打印警告。
-- `plugins/auth.ts` 的 `authGuard` 校验 Bearer token 与数据库 tokenVersion，从数据库读取当前身份放进 `ctx.user`。
+  等于谁都能伪造登录凭据。开发环境允许缺省，但会打印警告。
+- `plugins/auth.ts` 的 `authGuard` 校验 Bearer 登录凭据与数据库 tokenVersion，从数据库读取当前身份放进 `ctx.user`。
 
 **业务路由已启用认证与授权：**
 
 - app.ts 在业务模块前挂载 authGuard 与 permissionGuard。匿名请求返回 401，缺少权限返回 403。
 - GET /auth/me/access 返回角色汇总的视图与权限；前端据此创建导航、动态路由和操作按钮。
-- 每个请求重新读取权限，软删除角色或移除授权后无需等 token 到期。
-- 新接口默认从 method + 路由模板生成权限，无需登记前缀或 seed；权限目录由 plugins/permission-catalog.ts 托管。固定 code 与豁免仅配置例外，见[权限说明](../../docs/permissions.md)。
+- 每个请求重新读取权限，软删除角色或移除授权后无需等待登录凭据过期。
+- 新接口默认从 method + 路由模板生成权限，无需登记前缀或 seed；权限目录由 plugins/permission-catalog.ts 托管。固定权限标识与豁免仅配置例外，见[权限说明](../../docs/permissions.md)。
 - JWT 无服务端会话表；修改或重置密码原子递增 tokenVersion，旧 JWT 失效。前端登出仅清除本地凭据。
 
 - `app.ts` 只做：全局插件（CORS）、全局错误处理、**挂载各域的聚合插件**；业务逻辑一行不写。
@@ -263,7 +263,7 @@ export function rbacModule() {
 每次启动调 `seedSystemData()`，**幂等**：按名字找，缺什么建什么，已有的一律不动。
 
 - **默认视图**：总览、系统管理菜单和五个页面、图书管理菜单和三个页面，共 11 个。创建角色之前先创建全部视图。
-- **权限点**：插件从实际路由生成；示例保留 `<scope>.<资源>.<动作>` 的 33 个固定 code，新接口默认使用 `METHOD:/route`。seed 只读取目录配置角色。
+- **权限点**：插件从实际路由生成；示例保留 `<scope>.<资源>.<动作>` 的 33 个固定权限标识，新接口默认使用 `METHOD:/route`。初始化过程只读取目录配置角色。
 - **两个内置角色**：
   - **管理员** —— 全部视图 + 全部权限。
   - **观察者** —— 图书管理下的 4 个视图 + `book.*.read` 三个权限。
@@ -282,11 +282,11 @@ export function rbacModule() {
 
 - 首次创建使用 `ADMIN_EMAIL` / `ADMIN_PWD`，组织不存在时自动创建默认组织；生产密码由部署环境提供。
 - `initial_admin` 是持久标记，包含软删除记录。改名、撤权和软删除不会触发重建，也不会恢复角色绑定。
-- 创建账号与首次角色绑定在同一事务中；事务 advisory lock 和部分唯一索引防止并发重复初始化。
+- 创建账号与首次角色绑定在同一事务中；事务协作锁和部分唯一索引防止并发重复初始化。
 - 迁移将现有 name=admin 的第一条记录标记为初始管理员，不改变密码、删除状态或角色绑定。
 - 未配置管理员凭据则跳过管理员创建；目录同步或初始化失败阻止监听，不提供半初始化服务。
 - 日志不打印密码。参数 `{ email, password }` 只用于注入首次凭据。
-- 一次性升级迁移为仍有 rbac.user.update 的原有「管理员」角色补齐 resetPassword；其他角色需显式授予。后续 seed 不恢复已撤销的权限。
+- 一次性升级迁移为仍有 rbac.user.update 的原有「管理员」角色补齐 resetPassword；其他角色需显式授予。后续初始化不恢复已撤销的权限。
 
 完整密码接口及会话撤销规则见[密码管理](../../docs/passwords.md)。
 
@@ -359,7 +359,7 @@ is TEXT` —— **连 `eq` 都不行**，更不用说 `lower()` / `ilike()`。
   > 「列 X：类型应为 integer」—— 说明它**确实在比较列类型**。于是 `text()` → `str(n)`
   > 之后 check 仍说“一致”，就证明了生成的 SQL 类型没变。
 
-- **`.use(工厂)` 与 `.use(工厂())` 不是一回事。** Elysia 见到函数就当 functional plugin，
+- **`.use(工厂)` 与 `.use(工厂())` 不是一回事。** Elysia 见到函数就当函数式插件，
   拿**当前实例**去调它；而我们的工厂忽略入参、返回新实例 —— 返回的那个实例成了新的根，
   **其后**所有 `.use()` 都嵌进了它的 prefix。实测得到一组
   `/rbac/organizations/rbac/views/`，症状是后几个模块集体 404、第一个模块正常。
@@ -369,7 +369,7 @@ is TEXT` —— **连 `eq` 都不行**，更不用说 `lower()` / `ilike()`。
   而写入只落进其中一张。
 - **软删除会让关联“变得可能为 null”。** 全局过滤器按列名注册，**关联查询也被它管着**：
   软删除一个组织后，`GET /rbac/users/:id` 的 `organization` 读出来是 `null`；软删除书店后，
-  图书的 `store` 同样是 `null`。所以 response schema 里，**任何指向可软删除实体的对象投影
+  图书的 `store` 同样是 `null`。所以响应校验模型里，**任何指向可软删除实体的对象投影
   都要允许 null**（`t.Union([t.Object({ ... }), t.Null()])`），否则契约就与响应不符 —— 而
   Elysia 的 response 校验**不一定**替你发现（实测它老老实实返回了 200 + `null`）。
   列表形式的关联不会变成 `null`，但会**少几个**：已删除的成员从数组里消失。
@@ -389,7 +389,7 @@ is TEXT` —— **连 `eq` 都不行**，更不用说 `lower()` / `ilike()`。
   展平成 `parentName` / `parentPath` … 一整套。
 - **`createGlobalFilterManager`**（≥0.2.1）接受 `EntityManager`，模型清单由它的 `entities()` 汇总，
   不必手写；**它是异步的**，要用顶层 await 在构造客户端之前注册完。
-- 前端 Eden Treaty 需要路由声明 **response schema** 才能收敛 `data` 类型；只写 handler 返回值
+- 前端 Eden Treaty 需要路由声明 **响应校验模型** 才能收敛 `data` 类型；只写处理函数返回值
   时，全局 `onError` 的错误体会被并进 `data`。
 
 ## 10. 交付检查

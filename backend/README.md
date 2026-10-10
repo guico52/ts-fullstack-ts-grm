@@ -1,4 +1,4 @@
-# backend
+# 后端服务
 
 `ts-fullstack-ts-grm` 的后端：**Elysia + PostgreSQL + ts-grm**。
 
@@ -150,7 +150,7 @@ tests/                     单测；tests/integration/ 需真实库
 精确的关联替换，所以读写分工：查询走 DSL，insert/update/delete 走参数化 SQL。
 理由见约束文档第 4 节。
 
-**连接池懒建立。** 进程启动不连库，首次查询才连；数据库没起也能启动并通过 `/health` 探活。
+**启动前完成初始化。** 连接池在首次查询时建立连接；正式入口会先同步权限目录并初始化数据，再开始监听。数据库不可用或初始化失败会阻止启动。
 
 **软删除是全局过滤器。** `model/index.ts` 用 `createGlobalFilterManager(entityManager)` 注册一次，
 所有查询自动排除 `deleted_at` 非空的行，repository 里不必重复写条件。**关联查询同样被过滤**，

@@ -1,4 +1,4 @@
-# frontend
+# 前端应用
 
 Vue 3 管理端：TypeScript、Vite、Tailwind v4、Pinia、Vue Router、shadcn-vue / Reka UI。
 这是当前全栈仓库的前端子项目，使用真实后端、JWT 登录及 RBAC 动态路由。
@@ -25,7 +25,7 @@ bun run check
 | 文件                                       | 用途                                     |
 | ------------------------------------------ | ---------------------------------------- |
 | src/lib/api.ts                             | 唯一 Treaty 客户端，自动携带 token       |
-| src/lib/resource-api.ts                    | unknown 表单数据转换为后端推导的请求类型 |
+| src/lib/resource-api.ts                    | 类型明确的表单值转换为后端推导的请求类型 |
 | src/lib/rbac.ts、src/lib/books.ts          | 资源字段、列表列与表单元数据             |
 | src/components/data/ResourceListView.vue   | 共享列表、分页、编辑与删除               |
 | src/components/rbac/ResourceFormDialog.vue | 共享表单及字段校验                       |
@@ -35,7 +35,7 @@ bun run check
 
 数据来自 API，列表按服务端 limit / offset 分页；视图管理展示层级树。
 导航来自 GET /auth/me/access，而不是静态路由表。操作能力经 props 传给展示组件，后端独立验证权限。
-当前未提供 i18n、token 撤销、服务端列表搜索或排序；关联候选最多加载 100 条，大规模数据应改成服务端搜索。
+当前未提供国际化、独立会话撤销接口、服务端列表搜索或排序；关联候选最多加载 100 条，大规模数据应改成服务端搜索。
 
 ## 文档
 

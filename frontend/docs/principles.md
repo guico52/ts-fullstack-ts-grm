@@ -1,318 +1,156 @@
-# Design principles
+# 设计原则
 
-示意代码中的 orders / members 是教学变量；当前业务使用 ResourceFormDialog、资源 spec 与 typed API adapter。
+以下 21 条规则来自模板开发中实际出现过的问题。示例中的 `orders`、`members` 是教学变量；当前业务使用 `ResourceFormDialog`、资源配置及类型明确的请求适配器。
 
-Twenty-one rules. They are here because each one is a mistake that was made,
-seen in a screenshot, and then made impossible to repeat.
+源码检查覆盖标题、卡片和分页等结构规则，浏览器检查覆盖布局、交互反馈和导航；其他规则只有部分覆盖或需要人工审查。完整边界见[项目约束](./constraints.md)。
 
-Source guards cover rules 3, 4 and 13; browser tests cover layout,
-affordance and navigation (14–16). Other rules have partial coverage or
-require review. See [constraints.md](./constraints.md) for the full project
-constraints and their enforcement boundaries.
+## 1. 间距分两级
 
----
+`Field` 内的标签、控件、说明和错误之间使用 `gap-3`；`FieldGroup` 内不同字段之间使用 `gap-7`。内部间距小于字段间距，用户才能看出说明属于哪个输入框。
 
-## 1. Two spacing levels, never one
-
-A field's label, control, help text and error sit `gap-3` apart inside a
-`Field`. Separate fields sit `gap-7` apart inside a `FieldGroup`.
-
-**Why.** Giving every element the same gap is the single most common reason
-a form built from these same components still looks unfinished. The eye has
-no way to tell which hint belongs to which input, so it reads the whole
-thing as an undifferentiated list.
-
-**The one exception:** `gap-5` inside a dialog, because a dialog is a
-tighter column. The _ratio_ is what carries the meaning and it still holds.
-What is not sanctioned is a third value — if a group needs some other gap,
-the layout is wrong, not the number. See
-[forms.md](./forms.md#spacing-inside-a-dialog).
+弹窗内允许使用 `gap-5`，仍保持两级比例，不新增第三套间距。详见[弹窗间距](./forms.md#弹窗间距)。
 
 ```vue
-<!-- Yes -->
+<!-- 正确：字段之间有独立间距 -->
 <FieldGroup>
-  <Field>…</Field>   <!-- 28px between fields -->
+  <Field>…</Field>
   <Field>…</Field>
 </FieldGroup>
 
-<!-- No -->
+<!-- 错误：所有元素使用同一间距，说明容易被当作下一个字段 -->
 <div class="space-y-3">
   <Label>…</Label>
   <Input />
-  <p>Hint</p>
-  <Label>…</Label>   <!-- same gap: the hint now looks like a third field -->
+  <p>提示</p>
+  <Label>…</Label>
 </div>
 ```
 
----
+## 2. 页面边距使用两种方案
 
-## 2. Page padding is one of two values
+普通页面使用 `p-4 space-y-4`；总览类页面使用 `p-4 md:p-6 space-y-6`。统一页面边距，避免各页面自行设值导致布局不一致。
 
-`p-4 space-y-4` for ordinary pages. `p-4 md:p-6 space-y-6` for a
-dashboard-style first screen. Nothing else.
+## 3. 页面唯一主标题由 PageHeader 提供
 
-**Why.** A page that invents a third value is how an app stops looking like
-one app. Two values cover every case, so there is never a reason to add a
-third.
+主标题为 20px、字重 650、字距 `-0.01em`，副标题使用 14px 次要文字色。分区使用 `SectionHeader`，避免多个大标题互相竞争。
 
----
+字号下限为 14px，关键文字从 16px 起；`main.css` 统一将 `text-xs` 调整为 14px。检查拒绝低于下限的字号，以及页面自行渲染的 `<h1>`。
 
-## 3. One `<h1>` per page, owned by `PageHeader`
+普通页面导入 `PageHeader`；资源页面可以由 `ResourceListView` 代为提供，后者也受检查约束。
 
-20px / weight 650 / `-0.01em` tracking, with a 14px muted subtitle.
-Sections use `SectionHeader` (16px uppercase + hairline); they never get
-their own big heading.
+## 4. 数据卡片标题使用统一类名
 
-**Why.** Two competing headings make a page read as two pages. The negative
-tracking is not decoration — it is what keeps a heading at this size from
-looking loose next to 14px body text.
-
-**The type floor.** Nothing in the app renders below 14px, and key text
-starts at 16px. `text-xs` resolves to 14px because `main.css` overrides the
-scale, not because every call site remembered to; a guard rejects any
-literal below the floor.
-
-**Enforced.** A guard fails the check if a view renders its own `<h1>` or
-fails to import `PageHeader`.
-
----
-
-## 4. Data-card titles use one exact class list
-
-```
+```text
 text-base font-semibold tracking-[0.08em] text-muted-foreground uppercase
 ```
 
-The stock shadcn `CardTitle` ships `leading-none font-semibold` and no size,
-so it inherits the body size; the uppercase tracking is what makes it read
-as a data card rather than as prose.
+默认 `CardTitle` 不提供完整字号，容易继承正文样式。统一类名保证不同卡片的标题层级一致；源码检查验证这一约定。
 
-**Why.** Sixteen cards with sixteen slightly different titles is the
-difference between a product and a prototype.
-
-**Enforced.** A guard fails the check on any other title class list.
-
----
-
-## 5. A placeholder is an example, never a label
+## 5. 占位符提供示例，不能代替标签
 
 ```vue
-<FieldLabel for="email">Work email</FieldLabel>
+<FieldLabel for="email">工作邮箱</FieldLabel>
 <Input id="email" placeholder="ada@example.com" />
 ```
 
-**Why.** A placeholder disappears the moment typing starts, so it can never
-be the thing the user checks against. It is also grey — it reads as
-"not filled in yet" even when it is a label.
+占位符在输入后消失，不能作为用户持续核对的字段名称。
 
----
+## 6. 错误状态通过 aria-invalid 表达
 
-## 6. Error state comes from `aria-invalid`, not a hand-written class
-
-The `Input`, `Select`, `Textarea` and `Checkbox` primitives already carry
-`aria-invalid:border-destructive` and `aria-invalid:ring-[3px]` in both
-themes.
+`Input`、`Select`、`Textarea`、`Checkbox` 已提供适用于两种主题的错误边框与焦点样式，不在表单中手写红色边框。
 
 ```vue
-<!-- Yes -->
+<!-- 正确 -->
 <Input :aria-invalid="hasError ? true : undefined" />
 
-<!-- No: four forms, four slightly different reds, and dark mode breaks -->
+<!-- 错误：颜色脱离统一主题变量 -->
 <Input :class="hasError ? 'border-red-500' : ''" />
 ```
 
-**Why.** Hand-painting the border is how one form ends up with four
-slightly different reds, none of which match `--destructive` in dark mode.
+配合 `aria-describedby` 指向错误说明，使用 `Field` 的 `data-invalid` 表达字段组状态。
 
----
+## 7. 数字使用 tabular-nums
 
-## 7. Numbers get `tabular-nums`
+等宽数字使数值更新时不改变列宽，也便于表格与指标卡对齐。
 
-**Why.** Without it a live figure reflows on every update and the whole row
-twitches. Cheap to add, immediately visible in any table or metric card.
+## 8. 技术值使用 font-mono
 
----
+IP、引用编号、邮箱、ID 和配置键等使用等宽字体，便于辨认相似字符。数值同时遵循等宽数字要求。
 
-## 8. Technical values get `font-mono`
+## 9. 深色主题通过细边框表达层次
 
-IPs, references, emails, IDs, config keys, amounts.
+`.dark` 下关闭 `--shadow-card`，使用 `ring-1 ring-border` 等细边框。深色背景上的阴影难以辨认，统一边框能更清楚地分隔表面。
 
-**Why.** Monospace makes the difference between two similar values visible
-instead of something the user has to read character by character.
+## 10. 不适用的字段隐藏
 
----
+条件不满足时隐藏字段，不堆积无法操作的灰色控件。隐藏逻辑与必填校验、清空语义必须一致，避免隐藏字段仍阻止提交。
 
-## 9. Depth in dark mode comes from hairlines, not shadows
-
-`--shadow-card` is switched off under `.dark` on purpose. Dark surfaces use
-`ring-1 ring-border` (an 8% white line) instead.
-
-**Why.** A shadow on a dark surface is nearly invisible and only fogs the
-area it is meant to lift. This is why `--shadow-card` has two definitions in
-`main.css`, one of which is `0 0 #0000`.
-
----
-
-## 10. Conditional fields are revealed, not disabled
-
-**Why.** A greyed-out field the user cannot act on adds length and visual
-noise without adding information. If a field is not applicable, it should
-not be on screen.
-
----
-
-## 11. Icon-only buttons carry both `aria-label` and a tooltip
+## 11. 图标按钮同时提供名称和提示
 
 ```vue
 <Tooltip>
   <TooltipTrigger as-child>
-    <Button size="icon-sm" :aria-label="`Edit ${order.reference}`">
+    <Button size="icon-sm" :aria-label="`编辑 ${order.reference}`">
       <Pencil class="size-4" />
     </Button>
   </TooltipTrigger>
-  <TooltipContent>Edit</TooltipContent>
+  <TooltipContent>编辑</TooltipContent>
 </Tooltip>
 ```
 
-**Why.** The icon names nothing on its own. `aria-label` serves assistive
-tech; the tooltip serves everyone else. A row of icon buttons with neither
-is a guessing game.
+`aria-label` 为辅助技术提供名称，`Tooltip` 为其他用户解释图标，两者都要保留。
 
----
-
-## 12. An empty table and an empty result are different screens
-
-They need different exits: "add something" versus "loosen the filters".
+## 12. 无数据和无匹配结果分别处理
 
 ```vue
-<p>{{ orders.total === 0 ? "No orders yet." : "No orders match these filters." }}</p>
-<Button v-if="orders.total === 0" @click="openCreate">New order</Button>
-<Button v-else variant="outline" @click="clearFilters">Clear filters</Button>
+<p>{{ orders.total === 0 ? "还没有订单。" : "没有匹配筛选条件的订单。" }}</p>
+<Button v-if="orders.total === 0" @click="openCreate">新建订单</Button>
+<Button v-else variant="outline" @click="clearFilters">清除筛选</Button>
 ```
 
-**Why.** One message for both is a dead end — it tells a user staring at a
-filtered-to-nothing table to create a record they already created.
+无数据提供创建入口，无结果提供清除筛选入口。已有数据被筛选隐藏时，不应要求用户重复创建。
 
----
+## 13. 平面表格提供分页
 
-## 13. A table is paginated. Always.
+不因数据少或当前一屏能放下就省略分页。分页说明当前数据在整个集合中的位置，新增数据后也保持可用。
 
-No exceptions for short tables, and none for "it fits on one screen".
+当前资源列表使用服务端分页；内存集合使用共享 `paginate()`。源码检查要求平面表格提供 `DataPagination`。视图管理使用完整层级树，是已明确的结构例外。详见[表格](./tables.md)。
 
-**Why.** A paginated table tells the user where they are in the whole set.
-An unpaginated one silently claims the set is small, and that claim stops
-being true at the first busy week — by which time the table is shipped.
+## 14. 页面在各宽度下不横向溢出
 
-**Enforced.** A guard fails the check if a view renders `<Table>` without
-`DataPagination`.
-
-See [tables.md](./tables.md) for the paging rules (the clamp, the window,
-the reset-on-filter).
-
----
-
-## 14. Layout does not overflow, at any width
-
-Every page is checked at every breakpoint in a real browser. A page that
-scrolls sideways fails the check.
-
-**Why.** Overflow is the most common layout defect and the least likely to
-be caught in review — it happens at a width the author never tried. It is
-also invisible to every other kind of test: a component test with happy-dom
-has no layout engine, so every element measures 0x0 and every assertion
-passes.
+真实浏览器按多个宽度检查页面。宽表允许在自己的容器内横向滚动，但容器本身不能越过视口。
 
 ```bash
 bun run test:browser
 ```
 
-The check ignores content inside a horizontally scrollable box (a wide
-table is _meant_ to scroll), but still measures the box itself.
+组件测试没有布局引擎，不能验证实际宽度。浏览器测试曾发现组件没有承接 `class` 导致控件过宽、数字输入触发字符串方法异常，以及 `AlertDialogAction` 提前关闭导致删除目标丢失。类型与单元测试不足以覆盖这些完整流程，详见[真实浏览器检查](./guards.md#第四层真实浏览器)。
 
-**Three real bugs this found, all of which passed typecheck and every unit
-test:**
+## 15. 可交互控件提供光标和悬停反馈
 
-1. A component whose root renders no element dropped the `class` passed to
-   it, so a date trigger kept its built-in `w-full` and pushed the whole
-   filter row past the card edge.
-2. A validator called `.trim()` on a value that arrives from
-   `<input type="number">` as a number. The submit handler threw, and the
-   only symptom was a button that did nothing.
-3. `AlertDialogAction` closed the dialog before the click handler ran,
-   clearing the target and making delete silently do nothing.
+可操作且未禁用的控件显示 `cursor: pointer`，悬停时有可见变化。光标表达可点击，样式变化表达当前目标；禁用控件不适用。
 
-See [guards.md](./guards.md#layer-4-the-browser) for the mechanics.
+Tailwind CSS v4 的基础样式不再为按钮设置手形光标，本项目在 `main.css` 的基础层统一恢复。后续新增基础组件也继承规则，个别确需默认光标的元素仍可用工具类覆盖。
 
----
+浏览器测试比较背景、文字、边框、阴影、变换、透明度和装饰等计算样式，图标按钮还检查图标本身。
 
-## 15. Every interactive control shows a hand, and reacts to hover
+### 图标颜色
 
-Two signals, and both are required:
-
-- **The cursor.** A control that shows an arrow is a control the user has
-  to guess about.
-- **A visible change on hover.** The cursor says "clickable"; the change
-  says "this one, right now, is what you are about to hit".
-
-**Why this needs a rule rather than good intentions.** Tailwind v4 removed
-preflight's `cursor: pointer` on `<button>`, on the grounds that the
-browser default for a button is `default`. That is accurate, and it means
-every button in the app showed an arrow until `main.css` put it back.
-shadcn-vue's components do not add it. Measured before the fix: **38
-controls across five pages**, plus a select trigger with no hover response
-outside dark mode and a switch with none at all.
-
-The fix is one rule in the base layer, not a class in each component: a
-primitive added later cannot forget it, and a utility can still override it
-where a pointer is genuinely wrong.
-
-**Disabled controls are excluded.** They are not clickable, and a hand that
-does nothing is worse than an arrow.
-
-```bash
-bun run test:browser
-```
-
-Checks every interactive control on every page, then samples hover on
-buttons, links, toggles, selects, switches and row actions — comparing the
-computed background, text, border, shadow, transform, opacity and
-decoration before and after. Icon buttons are sampled again on the glyph
-itself (see below).
-
-### The icon button trap
-
-A glyph drawn in `text-muted-foreground` reads as **disabled** before the
-user ever hovers it. That is the actual complaint — not "the hover is
-missing", but "it is grey".
-
-The mistake is putting any colour on the icon. A class on the glyph is
-fixed; it cannot follow the state of the control around it:
+图标继承按钮的 `currentColor`，不在图标上固定 `text-muted-foreground`，否则可操作图标会被误认为禁用。
 
 ```vue
-<!-- No: muted as a resting colour, so it reads as disabled -->
+<!-- 错误：图标固定为次要色，无法跟随按钮状态 -->
 <Button variant="ghost" size="icon-sm">
   <Pencil class="size-4 text-muted-foreground" />
 </Button>
 
-<!-- Also no: the muted resting colour is still there -->
-<Button variant="ghost" size="icon-sm" class="text-muted-foreground hover:text-foreground">
-  <Pencil class="size-4" />
-</Button>
-
-<!-- Yes: no colour at all on the glyph; it inherits the button's own -->
+<!-- 正确：由按钮控制颜色 -->
 <Button variant="ghost" size="icon-sm">
   <Pencil class="size-4" />
 </Button>
 ```
 
-Lucide icons stroke with `currentColor`, so simply leaving the class off is
-what makes it inherit. `variant="ghost"` already supplies the hover
-response (`hover:bg-accent hover:text-accent-foreground`), so the third
-form gets the rest for free.
-
-For a destructive action the warning belongs on **hover**, not at rest — a
-row of permanently red trash icons is noise, while a quiet icon that turns
-red under the cursor is a warning at the moment it matters:
+普通列表删除按钮在悬停时显示警示色：
 
 ```vue
 <Button variant="ghost" size="icon-sm" class="hover:bg-destructive/10 hover:text-destructive">
@@ -320,185 +158,71 @@ red under the cursor is a warning at the moment it matters:
 </Button>
 ```
 
-**The guard samples the resting colour**, not the hovered one, and compares
-it against the live `--muted-foreground` token read off the page. Checking
-only the hover state — which is what this scaffold did first — lets a
-permanently grey icon pass.
+视图树的操作按钮使用明确的语义色，规则见[组件](./components.md)。检查比较静止状态的图标颜色和实时 `--muted-foreground`，避免只检查悬停而放过长期灰色图标。控件整体处于占位状态时，可以整体使用次要色，图标仍继承控件颜色。
 
-The one legitimate use of muted on a glyph is when the **control itself**
-is in its placeholder state, like an empty date trigger. There the whole
-control is muted, the icon inherits, and both become full-strength together
-once a value is set.
+## 16. 菜单展开，页面导航
 
----
+菜单点击只展开或折叠，页面点击只导航。菜单默认展开，持久化关闭集合；访问关闭菜单内的页面时展开父菜单。
 
-## 16. A Menu expands; a View navigates. Never both
+两种行为分开，用户才不必猜测点击后是跳页还是展开。导航浏览器测试直接断言菜单点击后 URL 不变，详见[导航](./navigation.md)。
 
-Two entry kinds in the sidebar, and the difference is behavioural:
+## 17. 资源页面组合数据配置与请求
 
-- **View** — a leaf. Clicking navigates.
-- **Menu** — a parent. Clicking expands or collapses. **It never
-  navigates.**
+资源页面由 `src/lib/` 的资源配置和列表、删除、保存请求组成，表格、表单、分页与关联选择由 `ResourceListView` 统一提供。
 
-**Why.** A parent that does both is the single easiest way to make a
-sidebar feel unpredictable: the user cannot tell whether a click will move
-them or reveal something, so every click becomes a small gamble. Keeping
-the two behaviours on separate components removes the guesswork.
+共享结构避免八个资源页面重复同样的代码，也减少修改分页或工具提示时的维护范围。新增页面通过 SysView 和角色绑定进入导航；不额外维护静态路由与菜单表。共享列表已提供 `PageHeader`，页面不要重复渲染。
 
-The rule has three consequences worth stating outright, because each fixes
-a specific failure:
+## 18. 检查可以迁移，不能失去覆盖
 
-- Menus **default to expanded**, so a section added later is discoverable.
-- What is persisted is the **closed** set — storing the open set would make
-  every future Menu start shut, the same discoverability problem in a
-  different costume.
-- **Landing inside a closed Menu opens it.** Otherwise the sidebar shows
-  nothing about where the user is, which is the one thing it is for.
+表格从页面移入共享组件后，检查也必须覆盖 `components/data/`。页面标题检查允许共享列表代为提供标题，同时检查共享列表确实导入 `PageHeader`。
 
-**Enforced.** `tests/browser/navigation.spec.ts` asserts the negative case
-directly: clicking a Menu must leave the URL unchanged.
+检查必须断言自己确实匹配到目标文件；没有目标时仍通过的检查没有保护作用。结构例外也需要对应验证。
 
-See [navigation.md](./navigation.md).
+## 19. 阻止提交必须给出原因
 
----
+数字输入默认 `step="1"`，输入 `88.50` 可能触发原生校验；HTML 表单校验失败时不会触发提交处理，用户只看到没有响应的保存按钮。
 
-## 17. A page is its data, not its markup
+所有表单使用 `novalidate`，让自己的校验显示错误；小数字段仍声明正确的步长，例如价格使用 `step: 0.01`，并由图书资源测试验证。
 
-Every resource page is a spec in `src/lib/` plus three API calls. The table,
-the form dialog, the paginator and the relation pickers are one component
-(`src/components/data/ResourceListView.vue`), so adding a resource is a spec,
-a thin page, a route and a nav entry.
+控件能拒绝输入时，应防止无提示的拒绝，或将原因明确显示给用户。
 
-**Why.** Eight pages had become eight copies of the same 250 lines —
-identical down to the tooltips. They had not _drifted_; they would have, at
-the first change to the paginator. Copy-paste is not a style problem, it is
-a change-amplification problem: the cost is paid at the second edit, not the
-first.
+## 20. 控件跟随数据结构
 
-**A page using `ResourceListView` does not import `PageHeader` itself** — the
-component renders one. That is rule 18's business.
+- 一个可搜索 ID：`Combobox`。
+- 多个 ID：`MultiSelect`。
+- 多个具有层级意义的 ID：`TreeSelect`。
 
----
+独立组件让单选值保持 `string`、多选值保持 `string[]`，避免单个 `multiple` 标志使所有属性和事件都变成联合类型。
 
-## 18. A guard may move; it may not weaken
+树搜索保留命中节点的祖先，使用户看到页面所属菜单。只有分支显示展开箭头；点击箭头折叠，点击行选择。
 
-When the tables moved out of `views/` into `ResourceListView`, two guards lost
-their subject at once: "every view goes through `PageHeader`", and "the tables
-rule is actually watching something". The second one **failed**, which is
-exactly what it is for — a guard that matches no file passes for the wrong
-reason and then protects nothing.
+## 21. 界面不展示实现说明
 
-**The fix is to move the guard, never to drop it.** The table guard now reads
-`components/data/` as well; the `PageHeader` guard accepts `ResourceListView`
-as a stand-in, and a **new** guard requires that stand-in to actually import
-`PageHeader`. An exemption without a test is a hole.
+标签说明字段名称，不向填写表单的用户解释数据库约束、存储方式或后端实现。
 
----
+以下说明不应出现在业务表单中：
 
-## 19. Nothing that blocks a submit may do it silently
+- “列是 NOT NULL，所以必填。”
+- “保存时整体替换。”
+- “按菜单、页面、按钮三层展开。”
 
-A `<input type="number">` defaults to `step="1"`. A price of 88.50 is then
-invalid — and **a form that fails HTML5 validation never fires `submit`**. No
-request, no message, nothing but a 保存 button that looks dead.
+可用控件表达的规则直接由控件实现：
 
-**Why this is a rule and not a bug report.** The failure was invisible to
-typecheck, to the unit tests, to the source guards and to 145 browser tests.
-It was found by typing a decimal into a real form. Any constraint the browser
-can enforce behind your back needs an explicit answer in the spec: a money
-column declares `step: 0.01`, and `src/lib/books.test.ts` pins it.
+| 规则                       | 界面实现             |
+| -------------------------- | -------------------- |
+| 按钮必须挂在页面下         | 上级选择器只提供页面 |
+| 同层级按序排列             | 自动填入下一个排序值 |
+| 选择组件后生成组件名与路由 | 选择后自动填充       |
+| 金额支持两位小数           | 设置正确步长并校验   |
 
-The general form: when a control can reject input without telling anyone, the
-rejection has to be either impossible or visible.
+控件无法表达的限制放在具体错误中。允许保留输入示例、空状态、校验错误、图标按钮提示和说明页面用途的副标题。选择项的 `hint` 承载路由、代码和文件名等实际数据，不放“用于分组”等说明文字。
 
-**Which is why every form carries `novalidate`.** `<input type="email">` and a
-`type="number"` whose `step` the value cannot reach are the same trap with
-different triggers — the browser refuses to submit and says nothing. Turning
-validation off lets our own check run: `validateResource` for a resource form,
-a `computed` for the login page. Both put the reason on screen.
+此规则由审查保证；`ResourceField` 不提供用于堆积说明的 `hint` 字段。
 
----
+删除确认明确指出目标，例如“删除「三体」？”，按钮说明动作。不要向用户宣称软删除等实现细节，也不要把仍在数据库中的记录描述为永久丢失。无法同时做到真实且有用的说明可以省略；Reka UI 所需的描述节点保留为空并仅供辅助技术使用。
 
-## 20. The control follows the shape of the data
+## 共同原则
 
-Three pickers, and which one to use is not a matter of taste:
+> 界面不一致比缺少装饰更容易导致体验混乱。
 
-- **one id, searchable** — `Combobox`
-- **several ids** — `MultiSelect`
-- **several ids whose depth means something** — `TreeSelect`
-
-**Why three components rather than one with a `multiple` flag.** The two
-multi-selects differ from the single one in exactly two behaviours — the value
-is a list, and picking one does not close the popover — but the flag would
-turn every prop and every emit site into a union type for no gain.
-
-**And why the tree keeps its hierarchy while searching.** A flat result list
-answers "which rows match"; the question was "which page, under which menu".
-A hit is shown together with its ancestors, never as an orphan. Only branches
-get an expander, and the arrow sits inside the row: clicking it collapses,
-clicking the row selects.
-
----
-
-## 21. The screen explains nothing
-
-A label says what a field is. Nothing else on the screen says why the field
-exists, what it means, or how the system stores it.
-
-**Why.** Every explanatory line is read once — by the person who wrote it.
-After that it is furniture: it takes a row of height, it competes with the
-error message that lands in the same slot, and it goes stale the moment the
-rule changes. The worst of them are addressed to the wrong reader:
-
-- `列是 NOT NULL，所以必填。` — a note about the database, on a page whose
-  reader is filling in a form.
-- `保存时整体替换。` — how the write works, not what the user is choosing.
-- `共 12 条，按 菜单 → 页面 → 按钮 三层展开。` — the indentation already
-  says that, and says it without being read.
-
-**A rule that needs explaining is usually a rule the interface should be
-enforcing.** Move it into a control:
-
-| Instead of saying…         | Do this                              |
-| -------------------------- | ------------------------------------ |
-| 按钮必须挂在页面下         | the parent picker offers only pages  |
-| 同层级内由小到大           | the next number is already filled in |
-| 选中后组件名与路由一并填好 | they are already filled in           |
-| 单位为元，最多两位小数     | the input's `step` is `0.01`         |
-
-If a rule cannot be expressed as a control, it belongs in the **error
-message** — the one place a user is genuinely reading.
-
-**What is allowed.** These are not explanations and they stay: a
-placeholder is an example (`例如：新华书店`), an empty state is a state
-(`还没有图书。`), a validation error says what is wrong, a tooltip names an
-icon-only button, and a page's subtitle may say what the page is _for_.
-
-**A picker option's `hint` carries data, not prose.** A route, a code, a
-file name — something the user is choosing _between_. `用于分组` is prose,
-and it does not belong there.
-
-**Enforced by review, and by absence.** `ResourceField.hint` no longer
-exists, so the scaffold cannot grow one back out of habit.
-
-**A confirmation asks _which_, not _what happens_.** `删除「三体」？` names the
-row; the red button names the action. A sentence underneath can only go wrong,
-and this one did — twice: `该图书会被软删除，之后不再出现在列表与查询中` was the
-implementation talking, and its replacement, `删除后无法从界面恢复。`, reads as
-"the data is gone" when the write is a soft delete and the row is still in the
-database. Anyone who read that sentence and then had to ask whether the delete
-even happened was reading it correctly.
-
-If you cannot say something both true and useful in one line, say nothing. The
-description slot still has to exist (reka-ui requires one) — render it empty
-and screen-reader-only.
-
----
-
-## The principle behind the principles
-
-> Ugly comes from inconsistency, not from a lack of decoration.
-
-This codebase has an absurdly small number of design decisions: one radius,
-one shadow, one glass recipe, two page paddings, one card-title style, one
-paginator. Everything else is reuse. When you are tempted to add a value,
-first check whether one of the existing ones already covers the case.
+本项目统一圆角、阴影、玻璃表面、页面边距、卡片标题和分页组件。新增样式值前，先确认现有方案是否已经覆盖需求。

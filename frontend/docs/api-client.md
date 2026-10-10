@@ -29,7 +29,7 @@ import type { App } from "@ts-fullstack-ts-grm/backend"
 
 `frontend/package.json` 里这两项是链路的组成部分，不要删：
 
-- `"@ts-fullstack-ts-grm/backend": "workspace:*"` —— bun workspace 只有**显式声明**
+- `"@ts-fullstack-ts-grm/backend": "workspace:*"` —— Bun 工作区只有**显式声明**
   依赖才会建立 `node_modules` 链接。缺了它，包名解析不到，报错是
   `Cannot find module '@ts-fullstack-ts-grm/backend'`。
 - `"elysia"`（devDependency）—— Eden 的类型内部引用 Elysia 类型；前端不能解析它时，
@@ -53,7 +53,7 @@ if (error) {
 
 ## 错误处理：Treaty 不抛异常
 
-这是最容易写错的一处。**连接被拒、超时这类传输层失败不会 throw**，而是进入
+这是最容易写错的一处。**连接被拒、超时这类传输层失败不会抛异常**，而是进入
 `error` 分支：
 
 ```ts
@@ -76,8 +76,8 @@ if (error) {
 - 不要在 `src/lib/api.ts` 之外直接 `fetch` 后端，也不要新建第二个 treaty 实例。
 - 后端地址来自 `VITE_API_URL`（见 [`../.env.example`](../.env.example)），默认
   `http://localhost:3000`。不要在组件里硬编码地址。
-- 后端改 schema 后前端 typecheck 会立刻报错——这是设计意图，不要用 `as any` 绕过。
-- 后端新增路由后不需要生成任何代码，重新 typecheck 就能看到新方法。
+- 后端修改校验模型后前端类型检查会立刻报错——这是设计意图，不要用 `as any` 绕过。
+- 后端新增路由后不需要生成任何代码，重新检查类型就能看到新方法。
 
 ## 怎么确认这条链路真的连着
 
@@ -95,4 +95,4 @@ bun run test:e2e
 
 ## 通用资源表单的类型边界
 
-resource-api.ts 将具体控件值按字段类型归一化并验证，返回后端 schema 推导的请求类型。禁止 as never / as any 绕过请求契约。服务端继续验证长度、枚举和引用规则。
+resource-api.ts 将具体控件值按字段类型归一化并验证，返回后端校验模型推导的请求类型。禁止 `as never`、`as any` 绕过请求契约。服务端继续验证长度、枚举和引用规则。

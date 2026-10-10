@@ -1,53 +1,45 @@
-# Documentation
+# 前端文档
 
-Everything an agent or a new contributor needs before touching this codebase.
-Short on purpose: a rule that takes ten minutes to read is a rule that gets
-skipped.
+本目录提供修改前端前需要了解的架构、设计规则、组件用法和检查流程。完整约束以[项目约束总表](./constraints.md)为准，专题文档补充原因和示例。
 
-## Read in this order
+## 建议阅读顺序
 
-| Doc                                      | What it answers                                         |
-| ---------------------------------------- | ------------------------------------------------------- |
-| [template-usage.md](./template-usage.md) | 私有 Gitea 模板的引用、初始化、版本记录和更新方式。     |
-| [api-client.md](./api-client.md)         | 怎么调用后端：Eden Treaty、类型来源、错误处理与约定。   |
-| [constraints.md](./constraints.md)       | 项目约束总表：架构、品牌、视觉、交互、测试和交付。      |
-| [principles.md](./principles.md)         | The 16 design rules, with reasoning and examples.       |
-| [navigation.md](./navigation.md)         | Menu vs View, the sidebar tree, the icon rail.          |
-| [tokens.md](./tokens.md)                 | The actual colour, type, radius and shadow values.      |
-| [components.md](./components.md)         | Which component to reach for, and what never to do.     |
-| [forms.md](./forms.md)                   | Field spacing, errors, validation timing.               |
-| [tables.md](./tables.md)                 | Table structure, pagination, filters, empty states.     |
-| [architecture.md](./architecture.md)     | Where code goes, and why the layers are split this way. |
-| [guards.md](./guards.md)                 | How the rules are enforced, and how to add one.         |
-| [workflow.md](./workflow.md)             | Commands, checklists, known traps.                      |
+| 文档                            | 内容                                         |
+| ------------------------------- | -------------------------------------------- |
+| [模板使用](./template-usage.md) | 从当前全栈仓库初始化项目、记录来源和更新版本 |
+| [后端对接](./api-client.md)     | Eden Treaty、类型来源、错误处理与调用约定    |
+| [项目约束](./constraints.md)    | 架构、类型、品牌、视觉、交互、测试和交付要求 |
+| [设计原则](./principles.md)     | 21 条设计规则及其原因和示例                  |
+| [导航](./navigation.md)         | 菜单与页面行为、侧栏树及折叠图标栏           |
+| [主题变量](./tokens.md)         | 颜色、字体、圆角、阴影和动画                 |
+| [组件](./components.md)         | 组件选择、组合方式和使用边界                 |
+| [表单](./forms.md)              | 字段结构、间距、错误、校验和异步提交         |
+| [表格](./tables.md)             | 列、分页、筛选、空状态和删除                 |
+| [架构](./architecture.md)       | 目录职责、类型边界和会话管理                 |
+| [规则检查](./guards.md)         | 自动检查的实现、扩展和覆盖范围               |
+| [开发流程](./workflow.md)       | 命令、开发步骤、提交清单和常见问题           |
 
-## I want to…
+## 按任务查阅
 
-| Task                                           | Start here                                                                    |
-| ---------------------------------------------- | ----------------------------------------------------------------------------- |
-| Initialise a project from this template        | [template-usage.md](./template-usage.md)                                      |
-| Call the backend from the frontend             | [api-client.md](./api-client.md)                                              |
-| Add a page                                     | [principles.md](./principles.md) → [workflow.md](./workflow.md#adding-a-page) |
-| Add a sidebar entry, or a collapsible group    | [navigation.md](./navigation.md#添加页面)                                     |
-| Add a table                                    | [tables.md](./tables.md)                                                      |
-| Add or change a form                           | [forms.md](./forms.md)                                                        |
-| Add an accent or a theme value                 | [tokens.md](./tokens.md)                                                      |
-| Add a rule that must not be broken             | [guards.md](./guards.md#adding-a-guard)                                       |
-| Check a layout for overflow                    | [guards.md](./guards.md#layer-4-the-browser)                                  |
-| Understand why something looks the way it does | [principles.md](./principles.md)                                              |
+| 任务                 | 从这里开始                                                      |
+| -------------------- | --------------------------------------------------------------- |
+| 从模板初始化项目     | [模板使用](./template-usage.md)                                 |
+| 调用后端             | [后端对接](./api-client.md)                                     |
+| 添加页面             | [设计原则](./principles.md)和[添加页面](./workflow.md#添加页面) |
+| 添加侧栏入口或菜单组 | [导航：添加页面](./navigation.md#添加页面)                      |
+| 添加表格             | [表格](./tables.md)                                             |
+| 添加或修改表单       | [表单](./forms.md)                                              |
+| 添加强调色或主题变量 | [主题变量](./tokens.md)                                         |
+| 添加不可违反的规则   | [添加规则检查](./guards.md#添加规则检查)                        |
+| 检查布局溢出         | [真实浏览器检查](./guards.md#第四层真实浏览器)                  |
+| 理解界面的设计原因   | [设计原则](./principles.md)                                     |
 
-## The one-paragraph version
+## 核心要求
 
-Start with [项目约束总表](./constraints.md) for the complete checklist and
-its enforcement boundaries.
+前端使用 Vue 3、TypeScript、Tailwind CSS v4、Pinia 和 shadcn-vue。样式使用语义变量，不硬编码颜色；字号不低于 14px，关键文字从 16px 起。每个页面通过 `PageHeader` 提供唯一的 `<h1>`，数据卡片标题使用统一样式，表单使用 `Field` 系列及两级间距。
 
-Vue 3 + TypeScript + Tailwind v4 + Pinia + shadcn-vue. All styling
-goes through semantic tokens; no hard-coded colours. Nothing renders below
-14px and key text starts at 16px. Every view renders exactly one `<h1>`
-through `PageHeader`. Data-card titles use one exact class list. Form fields
-use the `Field` family with a two-level spacing rhythm. 普通资源列表使用服务端分页，视图管理使用层级树。 Rules that matter are enforced by tests, not by convention — run
-`bun run check` before calling a change complete.
+普通资源列表使用服务端分页，视图管理使用层级树。内部数据和回调保留具体类型，不以 `any`、`unknown` 代替建模。部分规则有自动检查，其他规则仍需人工审查，完成变更前运行 `bun run check`。
 
 ## 全栈项目
 
-[架构](./architecture.md)、[导航](./navigation.md)、[API 类型边界](./api-client.md)描述当前实现。跨两端扩展、测试和部署见[项目文档](../../docs/README.md)。
+[架构](./architecture.md)、[导航](./navigation.md)和[后端对接](./api-client.md)描述当前实现。跨前后端的扩展、测试和部署见[项目文档](../../docs/README.md)。

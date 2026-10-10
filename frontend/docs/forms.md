@@ -1,66 +1,47 @@
-# Forms
+# 表单
 
-示意代码中的 orders / members 是教学变量；当前业务使用 ResourceFormDialog、资源 spec 与 typed API adapter。
+当前业务使用 `ResourceFormDialog`、资源配置和类型明确的请求适配器；以下 `orders`、`members` 是教学变量。
 
-The `Field` family is what makes a form read as designed rather than
-assembled. Use it. Do not build a form out of `Label` + `Input` + a `<div>`
-with your own margins.
+表单使用 `Field` 系列，不自行用 `Label`、`Input` 和间距容器拼出另一套结构。参考 `src/components/rbac/ResourceFormDialog.vue`，创建和编辑共用弹窗，字段由资源配置驱动。
 
-Reference implementation: `src/components/rbac/ResourceFormDialog.vue` — one
-dialog for create and edit, with its fields driven by the resource metadata in
-`src/lib/rbac.ts`.
-
----
-
-## The structure
+## 字段结构
 
 ```vue
-<FieldGroup>                                  <!-- gap-7 between fields -->
-  <Field>                                     <!-- gap-3 inside a field -->
-    <FieldLabel for="email">Work email</FieldLabel>
+<FieldGroup> <!-- 字段之间 gap-7 -->
+  <Field> <!-- 字段内部 gap-3 -->
+    <FieldLabel for="email">工作邮箱</FieldLabel>
     <Input id="email" v-model="email" />
-    <FieldDescription>We only use it for invites.</FieldDescription>
+    <FieldDescription>仅用于发送邀请。</FieldDescription>
     <FieldError v-if="errors.email">{{ errors.email }}</FieldError>
   </Field>
 </FieldGroup>
 ```
 
-Four parts, one job each:
+| 组件               | 职责                                   |
+| ------------------ | -------------------------------------- |
+| `FieldGroup`       | 不同字段之间保持 28px 间距             |
+| `Field`            | 标签、控件和消息之间保持 12px 间距     |
+| `FieldLabel`       | 通过 `for` 关联真实控件                |
+| `FieldDescription` | 持续显示必要的用户提示，不承载实现说明 |
+| `FieldError`       | 原位显示校验错误                       |
 
-| Part               | Job                                                         |
-| ------------------ | ----------------------------------------------------------- |
-| `FieldGroup`       | Spaces **fields** apart (28px)                              |
-| `Field`            | Spaces a **label from its control** (12px)                  |
-| `FieldLabel`       | The label. Takes `for`, like a real `<label>`               |
-| `FieldDescription` | Persistent help text. Rarely the right answer — see rule 21 |
-| `FieldError`       | The error, in place of the description                      |
+内部间距小于字段间距，才能区分字段归属，详见[两级间距原则](./principles.md#1-间距分两级)。提示内容遵循[界面说明边界](./principles.md#21-界面不展示实现说明)。
 
-**The whole point is the ratio.** Field-internal gap < field gap. If you set
-one gap for everything, a description under an input reads as the label of the
-next input. See [principles.md](./principles.md#1-two-spacing-levels-never-one).
-
----
-
-## Orientation
+## 排列方向
 
 ```vue
-<Field>                                     <!-- vertical (default) -->
-<Field orientation="horizontal">            <!-- label beside the control -->
-<Field orientation="responsive">            <!-- vertical on mobile, horizontal from @md -->
+<Field> <!-- 默认垂直排列 -->
+<Field orientation="horizontal"> <!-- 标签位于控件旁 -->
+<Field orientation="responsive"> <!-- 小屏垂直排列，从 @md 起水平排列 -->
 ```
 
-Use `horizontal` for short labels next to a `Switch` or a compact `Select`.
-Use `vertical` when the control is full-width or the label is long.
+短标签配合开关或紧凑选择器可以水平排列；长标签或占满行宽的控件使用垂直排列。
 
----
-
-## Errors
-
-Three things, all required:
+## 字段错误
 
 ```vue
 <Field :data-invalid="!!errors.email || undefined">
-  <FieldLabel for="email">Work email</FieldLabel>
+  <FieldLabel for="email">工作邮箱</FieldLabel>
   <Input
     id="email"
     v-model="email"
@@ -71,75 +52,54 @@ Three things, all required:
 </Field>
 ```
 
-1. **`aria-invalid`** paints the control. The primitive already carries
-   `aria-invalid:border-destructive` and `aria-invalid:ring-[3px]` in both
-   themes. Do not write a red border yourself.
-2. **`aria-describedby`** points at whichever message is showing. This is
-   what makes a screen reader announce the error with the field.
-3. **`data-invalid` on the `Field`** turns the label and description
-   `--destructive` as a group.
+三项都要保留：`aria-invalid` 驱动控件已有错误样式，`aria-describedby` 关联当前错误文本，`Field` 的 `data-invalid` 表达整个字段组的错误状态。
 
-Note the `|| undefined` and `? true : undefined` — passing `false` would
-render `aria-invalid="false"`, which is _not_ the same as absent.
+未出错时传 `undefined` 以省略属性；显式传入 `false` 会渲染 `aria-invalid="false"`，与缺失属性的选择器匹配行为不同。不在各表单手写红色边框。
 
----
+## 校验时机
 
-## Validation timing
-
-**Validate on submit, then live after the first attempt.**
+首次提交时校验，首次尝试后实时反馈：
 
 ```ts
 const submitted = ref(false)
-
 const errors = computed(() => {
-  if (!submitted.value) return {} // silent until the first submit
+  if (!submitted.value) return {} // 首次提交前不显示错误。
   return validate(draft.value)
 })
 
 function submit() {
   submitted.value = true
   if (Object.keys(errors.value).length) return
-  // …
+  // 继续提交。
 }
 ```
 
-Validating on every keystroke marks a field red while the user is still
-typing the first character of a valid value. That trains people to ignore
-the error styling entirely — which is worse than no validation at all.
+避免用户刚开始输入就看到错误。客户端校验用于及时反馈，服务端仍需独立验证，不能只依赖前端。
 
-**Also validate more than once.** Client validation is a courtesy; the
-server validates again. Never let the client be the only gate.
+## 表单级错误
 
----
-
-## Form-level errors
-
-An error that is not about one field goes next to the button the user just
-pressed, not at the top of the page:
+非单字段错误显示在触发按钮附近，并提供 `role="alert"`：
 
 ```vue
 <div class="mt-6 flex flex-col gap-3">
   <p v-if="failure" role="alert" class="text-sm text-destructive">{{ failure }}</p>
   <div class="flex items-center gap-2">
-    <Button type="submit" :disabled="saving">…</Button>
-    <Button type="button" variant="ghost">Cancel</Button>
+    <Button type="submit" :disabled="saving">保存</Button>
+    <Button type="button" variant="ghost">取消</Button>
   </div>
 </div>
 ```
 
-`role="alert"` so it is announced. Submit button first, cancel second — the
-primary action keeps the position the hand already knows.
+普通表单主操作在前、取消在后，保持位置一致；删除确认遵循危险操作的单独规则。
 
----
-
-## Dialog forms
+## 弹窗表单
 
 ```vue
 <Dialog :open="open" @update:open="(v) => emit('update:open', !!v)">
   <DialogContent class="sm:max-w-lg">
     <DialogHeader>
-      <DialogTitle>New order</DialogTitle>
-      <DialogDescription>Add an order to the table.</DialogDescription>
+      <DialogTitle>新建订单</DialogTitle>
+      <DialogDescription>添加一条订单。</DialogDescription>
     </DialogHeader>
     <form novalidate @submit.prevent="submit">
       <FieldGroup class="gap-5">…</FieldGroup>
@@ -149,211 +109,107 @@ primary action keeps the position the hand already knows.
 </Dialog>
 ```
 
-- **`sm:max-w-lg` for a form**, `sm:max-w-sm` for a single question. A
-  full-width dialog stretches inputs to 1200px, which is unreadable.
-- **`FieldGroup class="gap-5"`** — a dialog is a tighter column than a page.
-- **The footer is inside the `<form>`** so the primary button is a real
-  `type="submit"` and Enter works.
-- **Re-seed on open, not on mount.** Watch `open` and reset the draft; a
-  component that is kept alive will otherwise show the previous record's
-  values the second time it opens.
-- **One dialog for create and edit.** Two components duplicate every field
-  and drift the first time a field is added. `null` means create.
+普通表单可以使用 `sm:max-w-lg`，单个问题使用较窄的 `sm:max-w-sm`；项目资源弹窗统一从 `dialog-sizes.ts` 选择宽度。不要让输入框无必要地占满整个屏幕。
 
-### Organising a long dialog form
+弹窗使用 `gap-5`。页脚在 `<form>` 内，确认按钮为 `type="submit"`，使回车可以提交。表单设置 `novalidate`，由自己的校验显示原因。
 
-A nine-field form is nine rows tall in one column, which is how a dialog ends
-up taller than the screen. `ResourceFormDialog` renders its fields from the
-resource spec, and the spec carries the layout:
+每次打开弹窗重新初始化草稿，不仅在挂载时初始化。创建和编辑共用组件，`null` 表示创建，避免两个组件的字段定义漂移。
 
-| Field property | Effect                                                                 |
-| -------------- | ---------------------------------------------------------------------- |
-| `legend`       | starts a section; following fields without one join it                 |
-| `span: 1`      | half width on a wide dialog, so two short fields share a row           |
-| `clearable`    | the picker offers a row that empties a non-required field              |
-| `visibleWhen`  | hides the field when the record's kind makes it meaningless            |
-| `requiredWhen` | required only for some kinds — a button needs a parent, a page may not |
-| `auto`         | a value the dialog derives from the others, until you type one         |
-| `picker`       | how a multi-value field is chosen: a flat `MultiSelect`, or the tree   |
-| `step`         | the step a `number` input allows — `0.01` for a money column           |
+### 长表单布局
+
+字段配置控制分区、并排、可见性和自动值：
+
+| 属性           | 效果                                       |
+| -------------- | ------------------------------------------ |
+| `legend`       | 开始一个分区，后续无分区标题的字段归入该组 |
+| `span: 1`      | 宽弹窗中占半行，让两个短字段并排           |
+| `clearable`    | 允许清空非必填选择字段                     |
+| `visibleWhen`  | 当前类型不适用时隐藏字段                   |
+| `requiredWhen` | 按类型决定必填，例如按钮必须有父页面       |
+| `auto`         | 用户手动编辑前，根据其他字段派生默认值     |
+| `picker`       | 多值选择使用平面或树形控件                 |
+| `step`         | 数字控件步长，例如金额使用 `0.01`          |
+| `derive`       | 选择后同步填充其他关联字段                 |
 
 ```ts
 { key: "type", label: "类型", kind: "select", span: 1,
   legend: "基本信息", options: VIEW_TYPES },
 { key: "sort", label: "排序", kind: "number", span: 1 },
 { key: "componentPath", kind: "component", legend: "组件与路由",
-  required: true, visibleWhen: (v) => v.type === "VIEW", derive: /* … */ },
+  required: true, visibleWhen: (v) => v.type === "VIEW", derive: /* 派生字段 */ },
 ```
 
-The view form reads as three sections — 基本信息, 组件与路由, 显示与层级 —
-with 类型/排序, 组件/组件名 and 上级视图/启用 paired. The order is deliberate:
-the things a developer decides first (kind, order, which component) sit above
-the cosmetic ones (icon). Adding a section, or pairing two fields, is a spec
-edit and never a `.vue` edit.
+视图表单按基本信息、组件与路由、显示与层级分区；优先显示类型、排序和组件等结构决策，再显示图标等外观配置。增加分区或并排字段只改配置，不重复改组件。
 
-**A hidden field is not a disabled one.** `visibleWhen` removes it from the
-layout, skips its required rule, and sends `null` for it on update — so a
-view switched from 页面 to 菜单 cannot keep a route it no longer renders.
-That is why `path` / `componentPath` / `componentName` are nullable in the
-database: a 菜单 is a grouping node and a 按钮 is a permission point, and
-neither is reached by a route.
+隐藏字段不等于禁用字段。`visibleWhen` 使其退出布局、跳过必填校验，并在更新时按约定清空；页面改成菜单后，不应保留失去意义的路由。菜单和按钮不注册路由，因此 `path`、`componentPath`、`componentName` 允许为空。
 
-**Two more hooks make the view tree expressible in the spec.**
-`narrowOptions` (a `ResourceSpec` member) narrows a picker to what the
-current draft allows — a page's parent may only be a menu, a button's only a
-page — so the invalid pairing cannot be picked. And the hierarchy itself is
-enforced by the backend, which answers `422 INVALID_HIERARCHY`; a picker that
-only offers legal choices is a convenience, not the guarantee.
+`ResourceSpec.narrowOptions` 限制父节点候选：页面只能选菜单，按钮只能选页面。后端仍验证层级，非法组合返回 `422 INVALID_HIERARCHY`；控件限制只是便利，不能代替服务端保证。
 
-**`auto` fills a field from the others until you touch it.** A view's `sort`
-is a position among its siblings, so it depends on the parent — which is
-itself a field. The dialog recomputes it whenever the draft changes, and
-stops the moment the user types into it, so changing the level never
-overwrites a value someone chose. The backend computes the same number
-inside the insert transaction, so a caller that skips the form (or two forms
-at once) still lands at the end of the level rather than at 0.
+`auto` 在用户手动编辑前根据父节点计算下一个排序值；创建时的自动值不能覆盖编辑已有记录的排序。后端插入事务也计算默认排序，确保绕过表单或并发创建时仍使用正确默认值。
 
-**A number field must declare a `step` when its column holds decimals.** A
-`<input type="number">` defaults to `step="1"`, so `numeric(10, 2)` refuses
-88.50 — and a form that fails HTML5 validation **never fires `submit`**. No
-request, no message, nothing but a dead 保存 button. See
-[principles.md](./principles.md#19-nothing-that-blocks-a-submit-may-do-it-silently).
+小数字段必须声明正确 `step`，例如价格使用 `0.01`。数字控件默认步长为 1，原生校验可能阻止提交事件；详见[提交反馈原则](./principles.md#19-阻止提交必须给出原因)。
 
-**Enumerated and reference fields are dropdowns, not text inputs.** `kind:
-"select"` and `kind: "component"` render the `Combobox` from
-`components/ui/combobox/` — a trigger plus a searchable popover. The old
-`NativeSelect` was a `<select>` wearing the input's classes: it opened the OS
-menu and could not be searched. It stays only for registry components that
-use it internally (`Calendar`).
+枚举和引用使用 `Combobox`，而不是自由文本或不可搜索的原生下拉菜单。`NativeSelect` 只保留给内部需要它的基础组件，例如 `Calendar`。
 
-**A relation with several values is a `MultiSelect`, and one whose ids form a
-tree is a `TreeSelect`.** Both are `kind: "links"`, told apart by
-`picker: "multi"` (the default) and `picker: "tree"`. The role form needs
-both: a role grants _pages_, which only mean something under their menu, and
-_permissions_, which are a flat set. The form picks the shape from the spec, so
-the two controls never have to be chosen between by hand — see
-[`components.md`](./components.md#the-three-pickers). Everything the picker
-offers is a convenience; the write is still a whole-set replacement, which is
-documented here and not on the form.
+多值关联使用 `kind: "links"`，默认 `picker: "multi"` 对应 `MultiSelect`，`picker: "tree"` 对应 `TreeSelect`。角色视图采用树选择，权限采用平面多选；选择结果仍按整体集合替换，内部写入机制不显示在表单中。详见[三种选择器](./components.md#三种选择器)。
 
-**Width follows the layout.** A dialog whose fields pair up opens at `xl`
-(768px) instead of `md` (512px) — pairing is a trap otherwise, because two
-half-width inputs in 512px come out at 221px each, narrower than the single
-full-width input they replaced. Sizes live in `src/lib/dialog-sizes.ts`; a
-spec can override with `width`, and a single-column form still gets `md`.
+并排布局默认使用 `xl`（768px），单列默认使用 `md`（512px），资源配置可以通过 `width` 覆盖。否则半行字段可能比原来的单列控件更窄。弹窗限制最大高度并允许内部滚动，确保居中后顶部字段仍可访问。
 
-This also matters for reachability, not just tidiness: a dialog that
-overflows the viewport has its **top** fields pushed off-screen (it is
-centred), and `DialogContent` caps height and scrolls for exactly that
-reason.
+## 弹窗异步写入
 
----
+写入期间用户仍可能操作界面，需要三个保障：
 
-## A dialog around an async write
-
-A save takes time, and the user can do things during it. Three rules, and
-each one closes a specific hole:
-
-**1. Disable every way out while saving.** Escape, outside clicks, Cancel
-and the corner close. Blocking three of the four leaves the door open:
-a Cancel button that still works is the one the user will find.
-
-**2. Snapshot before the first `await`.**
+1. 禁止重复提交，并阻止 Escape、点击外部、取消和右上角关闭等退出路径。
+2. 在首次 `await` 前快照目标 ID 与请求体，后续不读取可能已改变的草稿。
+3. 用会话标识验证响应仍属于当前弹窗，避免旧响应关闭后来打开的另一条记录。
 
 ```ts
 const editingId = props.order?.id ?? null
 const payload: OrderDraft = { ...draft.value }
-await orders.save(editingId, payload)
-```
-
-Reading `props.order` or `draft.value` after the await uses whatever the
-user has done since — including reopening on a different row. The snapshot
-fixes _what_ gets written.
-
-**3. Guard the response with a session token.**
-
-```ts
-let submitSession = 0
-
-watch(
-  () => props.open,
-  (open) => {
-    submitSession += 1 // any transition invalidates a save in flight
-    if (!open) return
-    // …re-seed the form
-  },
-)
-
 const session = submitSession
 await orders.save(editingId, payload)
-if (session !== submitSession) return // superseded: leave the UI alone
+if (session !== submitSession) return // 旧会话不再更新当前界面。
 emit("update:open", false)
 ```
 
-The snapshot fixes what is written; the token fixes _whose interface_
-reacts. Without it a save that finishes late dismisses whatever dialog is
-on screen now, which is not the record it was started for.
-
-> The token is a guard against a state the disabled buttons already
-> prevent. Keep both: the buttons are the interface, the token is the
-> invariant, and only one of them survives someone later deciding that
-> "Cancel should work while saving".
-
----
-
-## Date fields
-
-```vue
-<DatePickerField v-model="draft.placedAt" label="Placed on" />
+```ts
+let submitSession = 0
+watch(
+  () => props.open,
+  (open) => {
+    submitSession += 1 // 任何打开或关闭都会使旧提交失效。
+    if (!open) return
+    // 重新初始化草稿。
+  },
+)
 ```
 
-The model is an **ISO date string** (`"2026-09-14"`), never a `Date`.
+快照确定写入对象，会话标识确定由哪个界面处理响应。禁用按钮与会话校验都要保留，即使以后调整取消行为，也不会让旧响应影响新界面。
 
-**Why.** A `Date` carries a time and a zone. An order placed on the 1st
-drifts to the 30th for a user far enough east. A `YYYY-MM-DD` string cannot
-drift, and it sorts correctly lexicographically.
+## 日期字段
 
-`isEmail` and `isBlank` in `src/lib/validation.ts` are the gates the shared
-validators build on; `validateResource` composes them per field.
+当前没有日期资源控件。扩展日期选择器时，表单模型优先使用 `YYYY-MM-DD` 字符串，例如 `"2026-09-14"`；不要为只有日期的值引入 `Date` 的时间和时区语义，以免跨时区后日期变化。
 
----
+日期校验需捕获 `parseDate` 对非法日期抛出的异常。共享校验可基于 `src/lib/validation.ts` 的 `isEmail`、`isBlank` 等函数组合，资源字段校验使用 `validateResource`。
 
-## The rules, condensed
+## 规则清单
 
-1. `FieldGroup` outside, `Field` inside. Never one gap for both.
-2. `FieldLabel` with `for`, `Input` with matching `id`. Always.
-3. Placeholder is an example. If you are putting a label there, stop.
-4. `aria-invalid` paints the error; never a colour class.
-5. Validate on submit, live after.
-6. Form-level failure next to the submit button, with `role="alert"`.
-7. `novalidate` on the form so your validation is the only one talking.
-8. Keep every rule in `src/lib/` as a pure function and test it there.
-   `validateResource` in `src/lib/rbac.ts` is the pattern — it takes the
-   draft and the mode, and returns an error map. No Vue, no store, and its
-   own unit tests.
+1. `FieldGroup` 包含 `Field`，字段间与字段内使用不同间距。
+2. `FieldLabel.for` 与控件 `id` 一致。
+3. 占位符提供示例，不代替标签。
+4. 用 `aria-invalid` 表达错误。
+5. 首次提交时校验，之后实时反馈。
+6. 表单级错误放在提交按钮附近，使用 `role="alert"`。
+7. 表单设置 `novalidate`，避免原生校验阻止自己的处理。
+8. 校验放在 `src/lib/` 的纯函数中并测试，返回错误映射，不依赖组件或 store。
 
----
+## 弹窗间距
 
-## Spacing inside a dialog
+`FieldGroup` 默认 `gap-7`（28px），弹窗允许 `gap-5`（20px）。弹窗列宽更紧凑，但字段间距仍大于字段内部间距，含义不变。不要新增第三种间距，先调整布局。
 
-`FieldGroup` defaults to `gap-7` (28px). **A dialog uses `gap-5` (20px)**
-— the one sanctioned exception:
+## 实时错误优先使用 computed
 
-```vue
-<FieldGroup class="gap-5">
-```
-
-**Why.** A dialog is a tighter column than a page, and the default costs a
-screenful of scrolling for six fields. The _ratio_ still holds: the gap
-between fields is larger than the gap inside one, which is the part that
-carries the meaning. Only the scale changes.
-
-What is **not** sanctioned: a third value. If a field group needs some
-other gap, the layout is wrong, not the number.
-
----
-
-## A live-validating form uses `computed`, not `watch`
+错误是草稿的纯派生结果时，使用 `computed`：
 
 ```ts
 const errors = computed<MemberErrors>(() =>
@@ -361,12 +217,4 @@ const errors = computed<MemberErrors>(() =>
 )
 ```
 
-**Why.** The errors are a pure function of the draft, so storing them is
-storing something derivable — and a `watch` that assigns into an `errors`
-ref has to be kept in step with every field. A shallow watch quietly misses
-nested writes (`v-model="draft.email"` is one), which is a bug that looks
-like "the error message will not go away".
-
-`OrderFormDialog` uses a `watch` with `deep: true` because its errors are
-also re-checked against a snapshot taken at submit time. Both are correct;
-`computed` is the one to reach for first.
+用 `watch` 写入另一份错误状态需要同步每个字段，浅监听还可能遗漏嵌套修改，造成错误不消失。确需结合提交快照等额外状态时可使用深监听，但应明确依赖，优先使用派生结果。
