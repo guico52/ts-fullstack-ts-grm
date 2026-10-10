@@ -3,12 +3,13 @@ import { defineStore } from "pinia"
 
 import { readStorage, removeStorage, writeStorage } from "@/lib/storage"
 
-/** 登录后服务端回的四个字段。`token` 是 JWT；口令哈希不在其中，也不该在。 */
+/** 登录后服务端回的身份、改密状态与 token。`token` 是 JWT；口令哈希不在其中，也不该在。 */
 export interface SessionUser {
   id: string
   name: string
   email: string
   token: string
+  mustChangePassword?: boolean
 }
 
 const SESSION_KEY = "vat-session"
@@ -31,7 +32,10 @@ function readSession(): SessionUser | null {
     // Shape-check every field: a value in storage may have been written by an
     // older build, hand-edited, or truncated. A half-valid session is worse
     // than none, because the header would render it.
-    const { id, name, email, token } = parsed as Record<string, unknown>
+    if (!("id" in parsed) || !("name" in parsed) || !("email" in parsed) || !("token" in parsed))
+      return null
+    const { id, name, email, token } = parsed
+    const mustChangePassword = "mustChangePassword" in parsed && parsed.mustChangePassword === true
     if (
       typeof id !== "string" ||
       typeof name !== "string" ||
@@ -40,7 +44,7 @@ function readSession(): SessionUser | null {
     ) {
       return null
     }
-    return { id, name, email, token }
+    return { id, name, email, token, mustChangePassword: mustChangePassword === true }
   } catch {
     return null
   }
@@ -59,7 +63,7 @@ export const useAuthStore = defineStore("auth", () => {
    * Forget the session locally.
    *
    * JWT is stateless: clearing local storage does not revoke an already copied
-   * token. It remains valid until expiry; permissions are checked on every request.
+   * token. Password changes revoke it through tokenVersion; permissions are checked on every request.
    */
   function signOut() {
     user.value = null

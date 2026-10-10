@@ -23,7 +23,7 @@ applyPatches();
 
 export const SysUser = model("SysUser", "id", class {
   id = prop.i64().autoIncrement().asString();
-  /** 管理员初始化按名字找人，见 modules/rbac/user/bootstrap.ts。 */
+  /** 显示名可查可排序；管理员初始化使用持久 initialAdmin 标记。 */
   name = prop.str(100);
   /** 登录按邮箱查人，见 modules/auth/repository.ts。 */
   email = prop.str(255);
@@ -31,6 +31,10 @@ export const SysUser = model("SysUser", "id", class {
    * SQL 里永远不会出现 `pwd_hash = ...`，所以它不需要可查询：保持 `text()`。
    */
   pwdHash = prop.text();
+  tokenVersion = prop.i32().default(0);
+  mustChangePassword = prop.bool().default(false);
+  /** 持久初始化标记：改名、软删除或撤销角色都不会重新初始化。 */
+  initialAdmin = prop.bool().default(false);
   organization = prop.m2o(SysOrganization);
   /**
    * `SysRole.users` 的反向。不新增列——它复用同一张中间表，所以**不产生迁移**。
@@ -115,8 +119,16 @@ export const SysRole = model("SysRole", "id", class {
 
 export const SysPermission = model("SysPermission", "id", class {
   id = prop.i64().autoIncrement().asString();
-  /** 权限名本身就是标识符（如 rbac.organization.read），按它查是常态。 */
-  name = prop.str(100);
+  /** 后端托管的权限标识；角色关系仍绑定 id。 */
+  code = prop.str(255);
+  /** 已有权限尚未绑定接口时两者均为空，托管同步时补齐。 */
+  url = prop.str(1024).nullable();
+  method = prop.str(16).nullable();
+  /** 废弃不等于删除；角色关联保留，但不再参与有效授权。 */
+  deprecated = prop.bool().default(false);
   audit = auditFields;
   deletedAt = prop.dt().nullable();
+}, (ctx) => {
+  ctx.unique("code");
+  ctx.unique("url", "method");
 });

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ResourceFormValues } from "@/lib/resource"
 /**
  * The list page every resource shares.
  *
@@ -63,7 +64,7 @@ const props = defineProps<{
   }) => Promise<{ rows: ResourceRow[]; total: number }>
   remove: (id: string) => Promise<void>
   /** Values from the form, already shaped by `toRequestBody`. */
-  save: (body: Record<string, unknown>, id: string | null) => Promise<void>
+  save: (body: ResourceFormValues, id: string | null) => Promise<void>
   /** A tree asks for everything at once; a flat list takes the default. */
   pageSize?: PageSize
 }>()
@@ -172,7 +173,9 @@ async function confirmDelete() {
               >
                 {{ column.label }}
               </TableHead>
-              <TableHead v-if="actions.update || actions.delete" class="w-20"
+              <TableHead
+                v-if="actions.update || actions.delete || $slots['row-actions']"
+                class="w-20"
                 ><span class="sr-only">操作</span></TableHead
               >
             </TableRow>
@@ -187,8 +190,9 @@ async function confirmDelete() {
               >
                 {{ column.value(row) }}
               </TableCell>
-              <TableCell v-if="actions.update || actions.delete">
+              <TableCell v-if="actions.update || actions.delete || $slots['row-actions']">
                 <div class="flex items-center justify-end gap-1">
+                  <slot name="row-actions" :row="row" />
                   <Tooltip v-if="actions.update">
                     <TooltipTrigger as-child>
                       <Button

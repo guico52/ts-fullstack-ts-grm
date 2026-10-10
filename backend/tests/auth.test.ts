@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { bearerToken } from "../src/modules/auth/guard.ts";
+import { bearerToken } from "../src/plugins/auth.ts";
 
 describe("Bearer 头的解析", () => {
   it("取出 token", () => {
@@ -24,5 +24,17 @@ describe("Bearer 头的解析", () => {
   it("token 里出现空格时只取第一段 —— 分隔与取值都按规范来", () => {
     // Authorization 的值按第一个空格切分，多出来的部分不是 token 的一部分。
     expect(bearerToken("Bearer abc def")).toBe("abc");
+  });
+});
+
+import { permissionFor } from "../src/plugins/permission-codes.ts";
+describe("示例固定权限配置", () => {
+  it("重置接口绑定独立 code；新接口无需登记", () => {
+    expect(permissionFor("POST", "/rbac/users/:id/password")).toBe("rbac.user.resetPassword");
+    expect(permissionFor("POST", "/rbac/users/:id/password/")).toBe("rbac.user.resetPassword");
+    expect(permissionFor("POST", "/rbac/users")).toBe("rbac.user.create");
+    expect(permissionFor("PATCH", "/rbac/users/:id")).toBe("rbac.user.update");
+    expect(permissionFor("GET", "/book/books/export")).toBeNull();
+    expect(permissionFor("POST", "/rbac/users/:id/archive")).toBeNull();
   });
 });

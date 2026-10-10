@@ -97,6 +97,8 @@ const PAGES = [
   // 登录页在 shell 之外，而且它自己就在 /login —— gotoPage 会断言“没落在登录页”。
   { path: "/login", name: "登录", bare: true },
   { path: "/", name: "总览" },
+  { path: "/account/password", name: "修改密码" },
+  { path: "/account/profile", name: "我的信息" },
   { path: "/system/organizations", name: "组织" },
   { path: "/system/users", name: "用户" },
   { path: "/system/views", name: "视图" },

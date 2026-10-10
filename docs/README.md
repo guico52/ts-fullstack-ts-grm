@@ -1,21 +1,13 @@
 # 项目文档
 
-`ts-fullstack-ts-grm` 的项目级文档目录，记录跨前后端的整体内容：仓库结构、
-接口契约、数据模型、部署与运维。
+这里记录跨前后端的使用、扩展和交付流程。前端视觉规则在 frontend/docs/，后端分层规则在 backend/docs/。
 
-**当前状态：起步。** 前端骨架与后端骨架（RBAC 模型 + organization 示例模块）已就位，
-接口与数据模型随真实业务推进继续补充。
+- [权限目录与授权](./permissions.md)：自动生成、托管同步、固定 code 与路由变更边界。
+- [新增全栈资源](./extending.md)：从模型到权限、typed adapter 和页面。
+- [测试](./testing.md)：mock 浏览器、真实数据库及全栈 E2E。
+- [部署](./deployment.md)：迁移、环境变量、history 回退、初始化和认证边界。
+- [后端入口](../backend/README.md)及[约束](../backend/docs/constraints.md)。
+- [前端入口](../frontend/README.md)及[文档索引](../frontend/docs/README.md)。
+- [贡献指南](../CONTRIBUTING.md)、[安全报告](../SECURITY.md)。
 
-## 规划中的内容
-
-- 仓库结构与 workspace 约定
-- 前后端接口契约（前端请求层对接后端 schema）
-- 数据模型与迁移历史（`backend/migrations/`）
-- 环境变量、部署与运维
-
-## 相关文档
-
-- 后端说明与接口清单：[`../backend/README.md`](../backend/README.md)
-- 后端开发约束（模块分层与持久层分工）：[`../backend/docs/constraints.md`](../backend/docs/constraints.md)
-- 前端自身的开发约束与设计规则：[`../frontend/docs/README.md`](../frontend/docs/README.md)
-- 前端模板来源与定制记录：[`../frontend/docs/template-origin.md`](../frontend/docs/template-origin.md)
+- [密码管理](./passwords.md)：首次初始化、自助改密、按权限重置与 JWT 撤销。

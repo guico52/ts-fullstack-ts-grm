@@ -87,13 +87,13 @@ test.describe("Menu", () => {
 test.describe("View", () => {
   test("navigates on click and expands nothing", async ({ page }) => {
     await gotoPage(page, "/system/organizations")
-    await page.getByRole("link", { name: /^权限$/ }).click()
+    await page.getByRole("link", { name: /^权限管理$/ }).click()
     await expect(page).toHaveURL(/\/system\/permissions$/)
   })
 
   test("reaches a page inside the menu from the sidebar", async ({ page }) => {
     await gotoPage(page, "/")
-    await page.getByRole("link", { name: /^角色$/ }).click()
+    await page.getByRole("link", { name: /^角色管理$/ }).click()
     await expect(page).toHaveURL(/\/system\/roles$/)
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("角色")
   })

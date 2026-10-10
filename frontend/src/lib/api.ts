@@ -11,6 +11,7 @@
 import { treaty } from "@elysiajs/eden"
 
 import type { App } from "@ts-fullstack-ts-grm/backend"
+import { emitSessionEvent } from "./session-events"
 import { readStorage, SESSION_KEY } from "./storage"
 
 /**
@@ -30,7 +31,9 @@ function authHeaders(): Record<string, string> {
   const raw = readStorage(SESSION_KEY)
   if (!raw) return {}
   try {
-    const { token } = JSON.parse(raw) as { token?: unknown }
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== "object" || parsed === null || !("token" in parsed)) return {}
+    const token = parsed.token
     return typeof token === "string" && token !== "" ? { authorization: `Bearer ${token}` } : {}
   } catch {
     return {}
@@ -49,7 +52,19 @@ function authHeaders(): Record<string, string> {
  *
  * 不要在这个文件之外直接 `fetch` 后端，也不要新建第二个客户端实例。
  */
-export const api = treaty<App>(API_BASE_URL, { headers: () => authHeaders() })
+export const api = treaty<App>(API_BASE_URL, {
+  headers: () => authHeaders(),
+  onResponse: async (response) => {
+    if (response.status === 401) emitSessionEvent("expired")
+    if (response.status === 403) {
+      const body = await response
+        .clone()
+        .json()
+        .catch(() => null)
+      if (body?.code === "PASSWORD_CHANGE_REQUIRED") emitSessionEvent("password-required")
+    }
+  },
+})
 
 /**
  * Turn a Treaty failure into something a person can read.
@@ -61,14 +76,14 @@ export const api = treaty<App>(API_BASE_URL, { headers: () => authHeaders() })
  */
 export function describeApiError(error: unknown): string {
   if (typeof error === "object" && error !== null) {
-    const value = (error as { value?: unknown }).value
+    const value = "value" in error ? error.value : undefined
     if (typeof value === "object" && value !== null) {
-      const code = (value as { code?: unknown }).code
+      const code = "code" in value ? value.code : undefined
       if (code === "ConnectionRefused" || code === "ECONNREFUSED") return "后端服务无法连接。"
-      const message = (value as { message?: unknown }).message
+      const message = "message" in value ? value.message : undefined
       if (typeof message === "string" && message !== "") return message
     }
-    const status = (error as { status?: unknown }).status
+    const status = "status" in error ? error.status : undefined
     if (typeof status === "number") return `请求失败（HTTP ${status}）。`
   }
   if (error instanceof Error && error.message !== "") return error.message

@@ -101,7 +101,7 @@ export interface IconGroup {
 }
 
 /** Look an icon up by the name stored in the database, if it is in the catalogue. */
-export function findIcon(name: unknown): Component | undefined {
+export function findIcon(name: string | null | undefined): Component | undefined {
   if (typeof name !== "string" || name === "") return undefined
   for (const group of ICON_GROUPS) {
     const icon = group.icons[name]

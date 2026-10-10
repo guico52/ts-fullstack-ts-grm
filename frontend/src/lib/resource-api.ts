@@ -1,6 +1,6 @@
-/** 通用表单的 unknown 边界在这里检查；返回体由后端 schema 推导，禁止类型断言绕过 Treaty。 */
+/** 将具体控件值归一化为后端 schema 请求；返回体由后端 schema 推导，禁止类型断言绕过 Treaty。 */
 import { api } from "./api"
-import type { ResourceKey } from "./resource"
+import type { ResourceKey, ResourceFormValues } from "./resource"
 import type { OrganizationModel } from "../../../backend/src/modules/rbac/organization/model"
 import type { UserModel } from "../../../backend/src/modules/rbac/user/model"
 import type { ViewModel } from "../../../backend/src/modules/rbac/view/model"
@@ -10,32 +10,32 @@ import type { BookModel } from "../../../backend/src/modules/book/book/model"
 import type { AuthorModel } from "../../../backend/src/modules/book/author/model"
 import type { StoreModel } from "../../../backend/src/modules/book/store/model"
 
-type Draft = Record<string, unknown>
-function text(body: Draft, key: string): string {
+type Draft = ResourceFormValues
+function text(body: Draft, key: keyof Draft): string {
   const value = body[key]
   if (typeof value !== "string") throw new Error(`${key} 必须是字符串`)
   return value
 }
-function optionalText(body: Draft, key: string): string | undefined {
+function optionalText(body: Draft, key: keyof Draft): string | undefined {
   return body[key] === undefined ? undefined : text(body, key)
 }
-function nullableText(body: Draft, key: string): string | null | undefined {
+function nullableText(body: Draft, key: keyof Draft): string | null | undefined {
   return body[key] === null ? null : optionalText(body, key)
 }
-function number(body: Draft, key: string): number {
+function number(body: Draft, key: keyof Draft): number {
   const value = body[key]
   if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`${key} 必须是有限数字`)
   return value
 }
-function optionalNumber(body: Draft, key: string): number | undefined {
+function optionalNumber(body: Draft, key: keyof Draft): number | undefined {
   return body[key] === undefined ? undefined : number(body, key)
 }
-function boolean(body: Draft, key: string): boolean | undefined {
+function boolean(body: Draft, key: keyof Draft): boolean | undefined {
   const value = body[key]
   if (value === undefined || typeof value === "boolean") return value
   throw new Error(`${key} 必须是布尔值`)
 }
-function ids(body: Draft, key: string): string[] | undefined {
+function ids(body: Draft, key: keyof Draft): string[] | undefined {
   const value = body[key]
   if (value === undefined) return undefined
   if (!Array.isArray(value) || !value.every((id): id is string => typeof id === "string")) {
@@ -78,7 +78,6 @@ export function updateUser(body: Draft): UserModel["updateBody"] {
   return {
     name: optionalText(body, "name"),
     email: optionalText(body, "email"),
-    password: optionalText(body, "password"),
     organizationId: optionalText(body, "organizationId"),
   }
 }
@@ -131,13 +130,13 @@ export function updateRole(body: Draft): RoleModel["updateBody"] {
 
 export function createPermission(body: Draft): PermissionModel["createBody"] {
   return {
-    name: text(body, "name"),
+    code: text(body, "code"),
   }
 }
 
 export function updatePermission(body: Draft): PermissionModel["updateBody"] {
   return {
-    name: optionalText(body, "name"),
+    code: optionalText(body, "code"),
   }
 }
 

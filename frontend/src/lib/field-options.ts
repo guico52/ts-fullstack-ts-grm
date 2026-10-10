@@ -26,42 +26,42 @@ async function listForOptions(key: ResourceKey): Promise<ResourceRow[]> {
     case "organizations": {
       const { data, error } = await api.rbac.organizations.get({ query })
       if (error) throw error
-      return data.data as ResourceRow[]
+      return data.data
     }
     case "users": {
       const { data, error } = await api.rbac.users.get({ query })
       if (error) throw error
-      return data.data as ResourceRow[]
+      return data.data
     }
     case "views": {
       const { data, error } = await api.rbac.views.get({ query })
       if (error) throw error
-      return data.data as ResourceRow[]
+      return data.data
     }
     case "roles": {
       const { data, error } = await api.rbac.roles.get({ query })
       if (error) throw error
-      return data.data as ResourceRow[]
+      return data.data
     }
     case "permissions": {
       const { data, error } = await api.rbac.permissions.get({ query })
       if (error) throw error
-      return data.data as ResourceRow[]
+      return data.data
     }
     case "books": {
       const { data, error } = await api.book.books.get({ query })
       if (error) throw error
-      return data.data as ResourceRow[]
+      return data.data
     }
     case "authors": {
       const { data, error } = await api.book.authors.get({ query })
       if (error) throw error
-      return data.data as ResourceRow[]
+      return data.data
     }
     case "stores": {
       const { data, error } = await api.book.stores.get({ query })
       if (error) throw error
-      return data.data as ResourceRow[]
+      return data.data
     }
     default: {
       const unhandled: never = key

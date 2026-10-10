@@ -12,7 +12,13 @@
  * - `route`         — the file name in kebab-case, e.g. `/organizations-view`
  */
 
-const modules = import.meta.glob("/src/views/**/*.vue")
+import type { Component } from "vue"
+
+export interface ViewModule {
+  default: Component
+}
+
+const modules = import.meta.glob<ViewModule>("/src/views/**/*.vue")
 
 export interface ViewComponent {
   /** PascalCase file name without the extension, e.g. `OrganizationsView`. */
@@ -28,7 +34,7 @@ export interface ViewComponent {
    * only once the server says the signed-in user may reach it, so it has to look
    * the loader up by name (see `router/index.ts`).
    */
-  load: () => Promise<unknown>
+  load: () => Promise<ViewModule>
 }
 
 /**
@@ -48,7 +54,7 @@ export function toKebabCase(value: string): string {
 /** Derive a catalogue entry from a module path like `/src/views/Foo/Bar.vue`. */
 export function describeComponent(
   modulePath: string,
-  load: () => Promise<unknown> = () => Promise.resolve(null),
+  load: () => Promise<ViewModule> = () => Promise.resolve({ default: {} }),
 ): ViewComponent {
   const path = modulePath.replace(/^\//, "").replace(/^src\//, "")
   const file = path.split("/").pop() ?? ""

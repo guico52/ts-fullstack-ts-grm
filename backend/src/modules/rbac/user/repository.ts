@@ -43,24 +43,6 @@ export const userRepository = {
     return run(() => findOne(client, id));
   },
 
-  /**
-   * 按显示名找一行。
-   *
-   * 管理员初始化用它判断"该不该建"（见 bootstrap.ts）。`name` 没有唯一约束，
-   * 所以这里取首行；初始化只在启动时跑，同名多行时只要有一行就说明建过了。
-   */
-  findByName(name: string) {
-    return run(async () => {
-      const [row] = await client
-        .createQuery(SysUser, (q, user) => {
-          q.where(user.name.eq(name));
-          return q.select(user.fetch(UserView));
-        })
-        .fetchList();
-      return row ?? null;
-    });
-  },
-
   create(body: UserModel["createBody"]) {
     return transaction(async (session) => {
       // 口令只存哈希；明文不进数据库，也不出现在任何响应里。
@@ -69,7 +51,10 @@ export const userRepository = {
         "INSERT INTO sys_user (name, email, pwd_hash, organization_id) VALUES ($1, $2, $3, $4) RETURNING id",
         [body.name, body.email, pwdHash, body.organizationId],
       );
-      const created = await findOne(clientFor(session), String(inserted.rows[0].id));
+      const created = await findOne(
+        clientFor(session),
+        String(inserted.rows[0].id),
+      );
       if (!created) throw new Error("创建后读取用户失败");
       return created;
     });
@@ -77,18 +62,20 @@ export const userRepository = {
 
   update(id: string, body: UserModel["updateBody"]) {
     return transaction(async (session) => {
-      // 未传 password 时不改口令（COALESCE 保留原值）。
-      const pwdHash = body.password === undefined ? null : await Bun.password.hash(body.password);
       const updated = await session.query(
         `UPDATE sys_user
             SET name = COALESCE($2, name),
                 email = COALESCE($3, email),
-                pwd_hash = COALESCE($4, pwd_hash),
-                organization_id = COALESCE($5, organization_id),
+                organization_id = COALESCE($4, organization_id),
                 updated_at = now()
           WHERE id = $1 AND deleted_at IS NULL
           RETURNING id`,
-        [id, body.name ?? null, body.email ?? null, pwdHash, body.organizationId ?? null],
+        [
+          id,
+          body.name ?? null,
+          body.email ?? null,
+          body.organizationId ?? null,
+        ],
       );
       if (updated.rowCount === 0) return null;
       return findOne(clientFor(session), id);

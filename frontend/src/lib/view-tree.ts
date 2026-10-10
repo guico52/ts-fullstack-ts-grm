@@ -12,7 +12,13 @@ export interface ViewTreeRow {
   parentId: string | null
   /** Sibling order; missing sorts as 0. */
   sort?: number
-  [key: string]: unknown
+}
+
+/** 共享行投影必须具备树字段；类型收窄保留原实体字段。 */
+export function hasTreeFields<T extends { id?: string; parentId?: string | null }>(
+  row: T,
+): row is T & ViewTreeRow {
+  return typeof row.id === "string" && (row.parentId === null || typeof row.parentId === "string")
 }
 
 export interface TreeLine<T> {

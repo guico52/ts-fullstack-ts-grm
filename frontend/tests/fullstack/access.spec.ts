@@ -60,7 +60,7 @@ test("初始管理员可管理系统，观察者只读图书", async ({ page, re
       const permissions = await request.get(`${apiURL}/rbac/permissions?limit=100`, { headers })
       const views = await request.get(`${apiURL}/rbac/views?limit=100`, { headers })
       const permissionIds = (await permissions.json()).data
-        .filter((p: { name: string }) => p.name.startsWith("book.") && p.name.endsWith(".read"))
+        .filter((p: { code: string }) => p.code.startsWith("book.") && p.code.endsWith(".read"))
         .map((p: { id: string }) => p.id)
       const viewIds = (await views.json()).data
         .filter((v: { name: string }) => ["图书管理", "图书", "作者", "书店"].includes(v.name))

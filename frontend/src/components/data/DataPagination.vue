@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { SelectRootEmits } from "reka-ui"
 import { computed } from "vue"
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "@lucide/vue"
 
@@ -42,8 +43,9 @@ const window = computed(() => pageWindow(props.page, props.pageCount))
 const canGoBack = computed(() => props.page > 1)
 const canGoForward = computed(() => props.page < props.pageCount)
 
-function onPageSize(value: unknown) {
-  emit("update:pageSize", Number(value) as PageSize)
+function onPageSize(value: SelectRootEmits["update:modelValue"][0]) {
+  const size = PAGE_SIZES.find((size) => size === Number(value))
+  if (size !== undefined) emit("update:pageSize", size)
 }
 </script>
 

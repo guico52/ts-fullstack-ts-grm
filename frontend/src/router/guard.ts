@@ -27,13 +27,21 @@ export function installGuard(): void {
     const auth = useAuthStore()
 
     if (to.meta.layout === "bare") {
-      return auth.signedIn ? { path: "/" } : true
+      return auth.signedIn
+        ? {
+            path: auth.user?.mustChangePassword
+              ? "/account/password"
+              : (useAccessStore().landingPath ?? "/account/profile"),
+          }
+        : true
     }
 
     if (!auth.signedIn) {
       return { name: "login", query: to.fullPath === "/" ? {} : { redirect: to.fullPath } }
     }
 
+    if (auth.user?.mustChangePassword && to.name !== "password" && to.name !== "profile")
+      return { name: "password" }
     const access = useAccessStore()
     if (access.loaded) return true
 

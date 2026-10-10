@@ -1,14 +1,65 @@
 import { dto } from "@ts-grm/core";
-import { client, run } from "../../model";
+import { client, run, transaction } from "../../model";
 import { SysUser } from "../../model/rbac";
 
 /**
  * 登录要读 `pwdHash`，所以不能复用 `UserView` —— 那个视图刻意不含哈希。
  * 这个视图只在本模块内使用，**没有任何路由把它返回给调用方**。
  */
-const CredentialsView = dto.view(SysUser, (c) => [c.id, c.name, c.email, c.pwdHash]);
+const CredentialsView = dto.view(SysUser, (c) => [
+  c.id,
+  c.name,
+  c.email,
+  c.pwdHash,
+  c.tokenVersion,
+  c.mustChangePassword,
+]);
+
+const ProfileView = dto.view(SysUser, (c) => [
+  c.id, c.name, c.email, c.mustChangePassword,
+  c.organization.with((organization) => [organization.id, organization.name]),
+  c.roles.with((role) => [role.id, role.name]),
+]);
 
 export const authRepository = {
+  profile(id: string) {
+    return run(async () => {
+      const [row] = await client.createQuery(SysUser, (q, user) => {
+        q.where(user.id.eq(id));
+        return q.select(user.fetch(ProfileView));
+      }).fetchList();
+      return row ?? null;
+    });
+  },
+  findById(id: string) {
+    return run(async () => {
+      const [row] = await client
+        .createQuery(SysUser, (q, user) => {
+          q.where(user.id.eq(id));
+          return q.select(user.fetch(CredentialsView));
+        })
+        .fetchList();
+      return row ?? null;
+    });
+  },
+  /** Atomic version increment invalidates all previously issued JWTs. */
+  replacePassword(
+    id: string,
+    hash: string,
+    mustChange: boolean,
+    expectedVersion?: number,
+  ) {
+    return transaction(async (session) => {
+      const result = await session.query(
+        `UPDATE sys_user SET pwd_hash = $2, token_version = token_version + 1,
+         must_change_password = $3, updated_at = now()
+         WHERE id = $1 AND deleted_at IS NULL
+         AND ($4::integer IS NULL OR token_version = $4) RETURNING id`,
+        [id, hash, mustChange, expectedVersion ?? null],
+      );
+      return Boolean(result.rowCount);
+    });
+  },
   /**
    * 按邮箱找一行凭据。
    *

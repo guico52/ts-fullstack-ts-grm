@@ -12,13 +12,13 @@ export const permissionService = {
   },
 
   create(body: PermissionModel["createBody"]) {
-    return permissionRepository.create({ ...body, name: body.name.trim() });
+    return permissionRepository.create({ ...body, code: body.code.trim() });
   },
 
   async update(id: string, body: PermissionModel["updateBody"]) {
     const updated = await permissionRepository.update(id, {
       ...body,
-      ...(body.name !== undefined ? { name: body.name.trim() } : {}),
+      ...(body.code !== undefined ? { code: body.code.trim() } : {}),
     });
     if (updated === null) throw new ResourceNotFoundError("权限不存在");
     return updated;

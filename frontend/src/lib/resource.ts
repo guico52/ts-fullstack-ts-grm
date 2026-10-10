@@ -9,7 +9,7 @@
  * family would be the first sign that this file is missing.
  *
  * Everything here is data or a pure function. Rows arrive from the API as
- * `Record<string, unknown>`; the callbacks are where that gets shaped, and
+ * backend schema fields; form values are constrained to control outputs, and
  * they are testable without a DOM, which is why they live in `lib/`.
  */
 import type { Component } from "vue"
@@ -26,10 +26,20 @@ import { isEmail } from "./validation"
  * against this union, so a resource added in one place and forgotten in the
  * other fails the typecheck rather than the click.
  */
-export type ResourceKey =
-  "organizations" | "users" | "views" | "roles" | "permissions" | "books" | "authors" | "stores"
-
-export type ResourceRow = Record<string, unknown>
+import type {
+  FormFieldValue,
+  ResourceFormValues,
+  ResourceRow,
+  ResourceRowValue,
+  ResourceKey,
+} from "./resource-types"
+export type {
+  ResourceKey,
+  ResourceEntities,
+  FormFieldValue,
+  ResourceFormValues,
+  ResourceRow,
+} from "./resource-types"
 
 export interface FieldOption {
   value: string
@@ -65,17 +75,18 @@ export interface FieldOption {
  * exactly the kind of thing that produces a view that cannot be rendered.
  */
 export type FieldKind =
-  "text" | "email" | "number" | "boolean" | "select" | "links" | "icon" | "component"
+  "text" | "password" | "email" | "number" | "boolean" | "select" | "links" | "icon" | "component"
 
 export interface ResourceField {
-  key: string
+  key: keyof ResourceFormValues
   label: string
   kind: FieldKind
   /** Required when creating. */
   required?: boolean
-  /** Required when editing — defaults to false, which is what makes
-   *  "leave blank to keep the current password" expressible. */
+  /** Required when editing; defaults to false for partial updates. */
   requiredOnUpdate?: boolean
+  /** Only appears in create forms and is omitted from updates. */
+  createOnly?: boolean
   placeholder?: string
   /**
    * Section this field belongs to. Fields sharing a `legend` are rendered
@@ -106,7 +117,7 @@ export interface ResourceField {
    * parent — which is itself a field. Typing a value stops the automatic one
    * from overwriting it.
    */
-  auto?: (values: Record<string, unknown>, rows: readonly ResourceRow[]) => unknown
+  auto?: (values: ResourceFormValues, rows: readonly ResourceRow[]) => FormFieldValue
   /**
    * Hide the field when this returns false.
    *
@@ -116,12 +127,12 @@ export interface ResourceField {
    * update, so switching kinds cannot strand a value the record no longer
    * has a use for.
    */
-  visibleWhen?: (values: Record<string, unknown>) => boolean
+  visibleWhen?: (values: ResourceFormValues) => boolean
   /**
    * Required only for some kinds of record — a view's parent is mandatory
    * for a page or a button, and meaningless for a menu.
    */
-  requiredWhen?: (values: Record<string, unknown>) => boolean
+  requiredWhen?: (values: ResourceFormValues) => boolean
   /** Fixed choices for `select`. */
   options?: readonly FieldOption[]
   /**
@@ -141,7 +152,7 @@ export interface ResourceField {
    * value. The component picker uses it to write `componentName` and the
    * route at the same time, so one click replaces three typed strings.
    */
-  derive?: (value: string) => Record<string, unknown>
+  derive?: (value: string) => ResourceFormValues
 }
 
 /**
@@ -196,7 +207,7 @@ export interface ResourceSpec {
   /** The value used to name a row in confirmations. */
   label: (row: ResourceRow) => string
   /** Row → form values. The inverse of what `fields` describe. */
-  toForm: (row: ResourceRow) => Record<string, unknown>
+  toForm: (row: ResourceRow) => ResourceFormValues
   /**
    * Narrow a picker's options to those valid for the current draft. For the
    * view form: a page's parent must be a menu, a button's must be a page.
@@ -204,7 +215,7 @@ export interface ResourceSpec {
   narrowOptions?: (
     field: ResourceField,
     options: readonly FieldOption[],
-    values: Record<string, unknown>,
+    values: ResourceFormValues,
   ) => readonly FieldOption[]
 }
 
@@ -217,45 +228,45 @@ export interface ResourceSpec {
  * ---------------------------------------------------------------------- */
 
 /** A scalar, or an em dash when it is absent. */
-export function rowText(row: ResourceRow, key: string): string {
+export function rowText(row: ResourceRow, key: keyof ResourceRow): string {
   const value = row[key]
   return value === null || value === undefined || value === "" ? "—" : String(value)
 }
 
 /** The `name` of a nested reference object, for a many-to-one column. */
-export function nestedName(row: ResourceRow, key: string): string {
+export function nestedName(row: ResourceRow, key: keyof ResourceRow): string {
   const nested = row[key]
   if (typeof nested !== "object" || nested === null) return "—"
-  const name = (nested as ResourceRow).name
+  const name = "name" in nested ? nested.name : undefined
   return name === undefined || name === null ? "—" : String(name)
 }
 
 /** How many items a nested collection holds, for a many-to-many column. */
-export function nestedLength(row: ResourceRow, key: string): string {
+export function nestedLength(row: ResourceRow, key: keyof ResourceRow): string {
   const nested = row[key]
   return Array.isArray(nested) ? String(nested.length) : "0"
 }
 
 /** The `name`s of a nested collection, comma-joined. */
-export function nestedNames(row: ResourceRow, key: string): string {
+export function nestedNames(row: ResourceRow, key: keyof ResourceRow): string {
   const nested = row[key]
   if (!Array.isArray(nested) || nested.length === 0) return "—"
   return nested
     .map((item) =>
       typeof item === "object" && item !== null && "name" in item
-        ? String((item as ResourceRow).name)
+        ? String(item.name)
         : String(item),
     )
     .join("、")
 }
 
 /** Ids out of a relation field, whether it arrives as ids or as objects. */
-export function idsOf(value: unknown): string[] {
+export function idsOf(value: ResourceRowValue | string[]): string[] {
   return Array.isArray(value)
     ? value.flatMap((item) => {
         if (typeof item === "string") return [item]
         if (typeof item === "object" && item !== null && "id" in item) {
-          return [String((item as ResourceRow).id)]
+          return [String(item.id)]
         }
         return []
       })
@@ -275,12 +286,13 @@ export function relationalFields(spec: ResourceSpec): ResourceField[] {
  */
 export function validateResource(
   spec: ResourceSpec,
-  values: Record<string, unknown>,
+  values: ResourceFormValues,
   mode: "create" | "update",
 ): Record<string, string> {
   const errors: Record<string, string> = {}
 
   for (const field of spec.fields) {
+    if (mode === "update" && field.createOnly) continue
     // A field the current kind of record has no use for is not required.
     if (field.visibleWhen && !field.visibleWhen(values)) continue
 
@@ -317,12 +329,13 @@ export function validateResource(
  */
 export function toRequestBody(
   spec: ResourceSpec,
-  values: Record<string, unknown>,
+  values: ResourceFormValues,
   mode: "create" | "update",
-): Record<string, unknown> {
-  const body: Record<string, unknown> = {}
+): ResourceFormValues {
+  const body: ResourceFormValues = {}
 
   for (const field of spec.fields) {
+    if (mode === "update" && field.createOnly) continue
     const value = values[field.key]
 
     // Not applicable to this kind of record. Cleared on update, so a view
@@ -362,8 +375,8 @@ export function toRequestBody(
   // An omitted key means "unchanged"; undefined values would be serialized
   // as absent by JSON.stringify anyway, but dropping them here keeps the
   // object honest when a caller inspects it.
-  for (const key of Object.keys(body)) {
-    if (body[key] === undefined) delete body[key]
+  for (const field of spec.fields) {
+    if (body[field.key] === undefined) delete body[field.key]
   }
 
   return body

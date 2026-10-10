@@ -9,6 +9,7 @@ const baseURL = `http://127.0.0.1:${frontendPort}`
 /** 必须指向独立已迁移的测试库；两个服务都由测试管理，禁止复用其他进程。 */
 export default defineConfig({
   testDir: "./tests/fullstack",
+  outputDir: "./smoke-artifacts/fullstack",
   workers: 1,
   timeout: 30_000,
   use: { baseURL, trace: "retain-on-failure" },
@@ -28,7 +29,7 @@ export default defineConfig({
       },
     },
     {
-      command: `bun run build && bun run preview --port ${frontendPort} --strictPort`,
+      command: `bun run build --outDir smoke-artifacts/fullstack-dist && bun run preview --outDir smoke-artifacts/fullstack-dist --port ${frontendPort} --strictPort`,
       url: baseURL,
       reuseExistingServer: false,
       env: { VITE_API_URL: apiURL },

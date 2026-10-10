@@ -28,8 +28,6 @@ skipped.
 | Initialise a project from this template        | [template-usage.md](./template-usage.md)                                      |
 | Call the backend from the frontend             | [api-client.md](./api-client.md)                                              |
 | Add a page                                     | [principles.md](./principles.md) → [workflow.md](./workflow.md#adding-a-page) |
-| Add a chart or a data visualisation            | [components.md](./components.md)                                              |
-| Add a map                                      | [architecture.md](./architecture.md)                                          |
 | Add a sidebar entry, or a collapsible group    | [navigation.md](./navigation.md#添加页面)                                     |
 | Add a table                                    | [tables.md](./tables.md)                                                      |
 | Add or change a form                           | [forms.md](./forms.md)                                                        |
@@ -43,12 +41,11 @@ skipped.
 Start with [项目约束总表](./constraints.md) for the complete checklist and
 its enforcement boundaries.
 
-Vue 3 + TypeScript + Tailwind v4 + Pinia + shadcn-vue + ECharts. All styling
+Vue 3 + TypeScript + Tailwind v4 + Pinia + shadcn-vue. All styling
 goes through semantic tokens; no hard-coded colours. Nothing renders below
 14px and key text starts at 16px. Every view renders exactly one `<h1>`
 through `PageHeader`. Data-card titles use one exact class list. Form fields
-use the `Field` family with a two-level spacing rhythm. Every table is
-paginated. Rules that matter are enforced by tests, not by convention — run
+use the `Field` family with a two-level spacing rhythm. 普通资源列表使用服务端分页，视图管理使用层级树。 Rules that matter are enforced by tests, not by convention — run
 `bun run check` before calling a change complete.
 
 ## 全栈项目

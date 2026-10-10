@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ResourceFormValues } from "@/lib/resource"
 /**
  * The role list.
  *
@@ -10,7 +11,6 @@
 import ResourceListView from "@/components/data/ResourceListView.vue"
 import { api } from "@/lib/api.ts"
 import { ROLES } from "@/lib/rbac.ts"
-import type { ResourceRow } from "@/lib/resource.ts"
 
 import { saveResource } from "@/lib/resource-api"
 import { useResourceActions } from "@/composables/useResourceActions"
@@ -22,7 +22,7 @@ const spec = ROLES
 const list = async ({ limit, offset }: { limit: number; offset: number }) => {
   const { data, error } = await api.rbac.roles.get({ query: { limit, offset } })
   if (error) throw error
-  return { rows: data.data as ResourceRow[], total: data.total }
+  return { rows: data.data, total: data.total }
 }
 
 const remove = async (id: string) => {
@@ -30,7 +30,7 @@ const remove = async (id: string) => {
   if (error) throw error
 }
 
-const save = (body: Record<string, unknown>, id: string | null) => saveResource("roles", body, id)
+const save = (body: ResourceFormValues, id: string | null) => saveResource("roles", body, id)
 </script>
 
 <template>

@@ -16,6 +16,8 @@ export async function gotoPage(page: Page, path: string) {
   await waitForPageReady(page)
   const titles: Record<string, string> = {
     "/": "总览",
+    "/account/password": "修改密码",
+    "/account/profile": "我的信息",
     "/login": "登录",
     "/system/organizations": "组织",
     "/system/users": "用户",
@@ -187,6 +189,7 @@ export const TEST_ACCESS = {
     "rbac.user.create",
     "rbac.user.update",
     "rbac.user.delete",
+    "rbac.user.resetPassword",
     "rbac.view.read",
     "rbac.view.create",
     "rbac.view.update",
@@ -224,5 +227,17 @@ export async function signIn(page: Page, access: typeof TEST_ACCESS = TEST_ACCES
   await page.addInitScript((session) => {
     localStorage.setItem("vat-session", JSON.stringify(session))
   }, TEST_SESSION)
+  await page.route("**/auth/me", (route) =>
+    route.fulfill({
+      json: {
+        id: "1",
+        name: "测试用户",
+        email: "test@example.com",
+        mustChangePassword: false,
+        organization: { id: "1", name: "示例组织" },
+        roles: [{ id: "1", name: "管理员" }],
+      },
+    }),
+  )
   await page.route("**/auth/me/access**", (route) => route.fulfill({ json: access }))
 }

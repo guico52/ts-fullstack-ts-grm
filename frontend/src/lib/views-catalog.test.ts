@@ -45,7 +45,7 @@ describe("describeComponent", () => {
 
 describe("matchComponents", () => {
   // `load` 查询里用不到，但它是 ViewComponent 的一部分（路由按名字取组件用）。
-  const stub = () => Promise.resolve(null)
+  const stub = () => Promise.resolve({ default: {} })
   const catalog: ViewComponent[] = [
     { name: "UsersView", path: "views/UsersView.vue", route: "/users-view", load: stub },
     { name: "RolesView", path: "views/RolesView.vue", route: "/roles-view", load: stub },

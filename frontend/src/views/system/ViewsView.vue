@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ResourceFormValues } from "@/lib/resource"
 import { computed, ref } from "vue"
 import { Plus } from "@lucide/vue"
 
@@ -47,7 +48,7 @@ const {
     list: async () => {
       const { data, error } = await api.rbac.views.get({ query: { limit: 100, offset: 0 } })
       if (error) throw error
-      return { rows: data.data as ResourceRow[], total: data.total }
+      return { rows: data.data, total: data.total }
     },
     remove: async (id) => {
       const { error } = await api.rbac.views({ id }).delete()
@@ -73,7 +74,7 @@ const options = computed<Record<string, FieldOption[]>>(() => ({
 const formOpen = ref(false)
 const editing = ref<ResourceRow | null>(null)
 /** Values the form opens a *new* record with; see `addChild`. */
-const seed = ref<Record<string, unknown> | null>(null)
+const seed = ref<ResourceFormValues | null>(null)
 const pendingDelete = ref<ResourceRow | null>(null)
 /** The row whose delete is in flight, so its button can say so. */
 const pendingRemoveId = ref<string | null>(null)
@@ -112,7 +113,7 @@ function addChild(parent: ResourceRow) {
   formOpen.value = true
 }
 
-async function save(body: Record<string, unknown>, id: string | null) {
+async function save(body: ResourceFormValues, id: string | null) {
   await saveResource("views", body, id)
 }
 

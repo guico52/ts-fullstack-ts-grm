@@ -4,7 +4,7 @@ import { SysPermission } from "../../../model/rbac";
 import type { PermissionModel } from "./model.ts";
 
 /** 对外的字段视图；返回类型由 ts-grm 推导，不手工拼装。 */
-export const PermissionView = dto.view(SysPermission, (c) => [c.id, c.name]);
+export const PermissionView = dto.view(SysPermission, (c) => [c.id, c.code, c.url, c.method, c.deprecated]);
 
 /** 软删除由 model/index.ts 的全局过滤器挡掉，这里不必再写 deleted_at 条件。 */
 async function findOne(sql: SqlClient, id: string) {
@@ -42,8 +42,8 @@ export const permissionRepository = {
     return transaction(async (session) => {
       // 主键是数据库自增的 identity 列，不在 INSERT 里提供；用 RETURNING 取回。
       const inserted = await session.query(
-        "INSERT INTO sys_permission (name) VALUES ($1) RETURNING id",
-        [body.name],
+        "INSERT INTO sys_permission (code, url, method, deprecated) VALUES ($1, $2, $3, $4) RETURNING id",
+        [body.code, body.url ?? null, body.method ?? null, body.deprecated ?? false],
       );
       const created = await findOne(clientFor(session), String(inserted.rows[0].id));
       if (!created) throw new Error("创建后读取权限失败");
@@ -56,11 +56,14 @@ export const permissionRepository = {
       // 省略的字段保留原值（COALESCE）。
       const updated = await session.query(
         `UPDATE sys_permission
-            SET name = COALESCE($2, name),
+            SET code = COALESCE($2, code),
+                url = CASE WHEN $3 THEN $4 ELSE url END,
+                method = CASE WHEN $5 THEN $6 ELSE method END,
+                deprecated = COALESCE($7, deprecated),
                 updated_at = now()
           WHERE id = $1 AND deleted_at IS NULL
           RETURNING id`,
-        [id, body.name ?? null],
+        [id, body.code ?? null, body.url !== undefined, body.url ?? null, body.method !== undefined, body.method ?? null, body.deprecated ?? null],
       );
       if (updated.rowCount === 0) return null;
       return findOne(clientFor(session), id);

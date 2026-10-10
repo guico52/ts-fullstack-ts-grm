@@ -95,4 +95,4 @@ bun run test:e2e
 
 ## 通用资源表单的类型边界
 
-resource-api.ts 对 unknown 字段做运行时形状校验，返回后端 schema 推导的请求类型。禁止 as never / as any 绕过请求契约。服务端继续验证长度、枚举和引用规则。
+resource-api.ts 将具体控件值按字段类型归一化并验证，返回后端 schema 推导的请求类型。禁止 as never / as any 绕过请求契约。服务端继续验证长度、枚举和引用规则。

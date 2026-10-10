@@ -15,8 +15,10 @@ lib/ 不依赖 Pinia 实例；资源 spec 和导航条目可以引用 Vue 组件
 ## 请求与类型
 
 唯一客户端为 `src/lib/api.ts`，类型从 backend/src/app.ts 推导。
-通用表单产生 Record<string, unknown>，`src/lib/resource-api.ts` 检查字段的运行时类型并返回后端 schema 推导的 createBody / updateBody。
+通用表单产生 ResourceFormValues（字段来自后端 schema，值为控件标量或 ID 数组），`src/lib/resource-api.ts` 检查字段的运行时类型并返回后端 schema 推导的 createBody / updateBody。
 适配器不使用 as never 或 as any；新增必填字段必须调整适配器，Treaty 调用继续检查接口类型。字符串长度、引用有效性和业务规则由后端最终校验。
+
+内部数据与回调必须保留对应类型，不用 `any`、`unknown` 简化实现。具体类型来源、外部边界验证和必要例外遵循[类型约束](./constraints.md#类型约束)；后端遵循同样的[类型约束](../../backend/docs/constraints.md#类型约束)。
 
 ## 会话、导航与授权
 

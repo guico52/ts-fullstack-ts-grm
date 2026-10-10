@@ -129,12 +129,8 @@ validated for slots used in sequence; skipping around is not checked.
 therefore carry a legend or a table view — **colour is never the only
 channel carrying information.**
 
-Charts are ECharts, which paints into a canvas and cannot resolve `var()`.
-图表应从 document 的 computed style 读取这些 token（当前没有图表页面），并
-hands the values to the option builders, so changing a slot here still moves
-every chart. Multi-series charts take slots in order; where two slots would
-sit too close together in one theme (the dark slots 1 and 2), name the slot
-explicitly rather than reordering the palette.
+当前没有图表页面。将来增加 canvas 图表时，从 document 的 computed style 读取 token，绘制库不能直接解析 CSS var()；颜色、字体和主题更新需单独处理。
+多序列图表按顺序使用这些颜色，保留图例或表格，不能只用颜色传达信息。
 
 ---
 
@@ -211,7 +207,7 @@ depth there instead (principle 9).
 
 ## Glass
 
-One recipe, used by map overlays, sticky headers and toasts:
+A reusable recipe for overlays, sticky headers and toasts:
 
 ```css
 background: color-mix(in oklab, var(--background) 85%, transparent);

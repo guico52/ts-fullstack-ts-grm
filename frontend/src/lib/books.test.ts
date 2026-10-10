@@ -33,6 +33,7 @@ describe("library resources", () => {
     // The API returns numeric as a number, so 88.50 arrives as 88.5.
     expect(price?.value({ price: 88.5 })).toBe("88.50")
     expect(price?.value({ price: 128 })).toBe("128.00")
+    // @ts-expect-error 验证异常运行时数据；API 的 price 静态契约不允许 null。
     expect(price?.value({ price: null })).toBe("—")
   })
 
@@ -65,6 +66,7 @@ describe("library resources", () => {
   })
 
   it("toForm tolerates a missing store rather than inventing one", () => {
+    // @ts-expect-error 验证异常运行时关联；API 的 authors 静态契约不允许 null。
     expect(BOOKS.toForm({ name: "书", store: null, authors: null })).toMatchObject({
       storeId: undefined,
       authorIds: [],

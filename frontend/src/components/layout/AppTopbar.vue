@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from "vue-router"
-import { LogOut, Menu } from "@lucide/vue"
+import { KeyRound, LogOut, Menu, UserRound } from "@lucide/vue"
 
 import AccentToggle from "@/components/layout/AccentToggle.vue"
 import ThemeToggle from "@/components/layout/ThemeToggle.vue"
@@ -23,7 +23,7 @@ const access = useAccessStore()
  * 撤路由不能省。不撤的话，换一个权限更小的账号登进来，上一个人的页面还在路
  * 由表里 —— 守卫会放行，因为已登录；页面渲染出来后再被后端一个个 403。
  *
- * token 是自证的，服务端没有会话可终结，所以这里不需要请求。
+ * 本地退出不撤销其他客户端；修改或重置密码会通过 tokenVersion 撤销旧 JWT。
  */
 async function signOut() {
   auth.signOut()
@@ -70,26 +70,39 @@ async function signOut() {
       <span class="topbar-wing topbar-wing-end" aria-hidden="true"><i /><i /></span>
     </div>
 
-    <div class="topbar-end flex min-w-0 items-center justify-end gap-2">
+    <div class="topbar-end flex min-w-0 items-center justify-end gap-2 flex-wrap">
       <AccentToggle />
       <ThemeToggle />
       <!-- 会话显示与退出入口；请求授权由后端独立校验。 -->
       <template v-if="auth.signedIn">
+        <Tooltip>
+          <TooltipTrigger as-child
+            ><Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="我的信息"
+              @click="router.push('/account/profile')"
+              ><UserRound class="size-4" /></Button
+          ></TooltipTrigger>
+          <TooltipContent>我的信息</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger as-child
+            ><Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="修改密码"
+              @click="router.push('/account/password')"
+              ><KeyRound class="size-4" /></Button
+          ></TooltipTrigger>
+          <TooltipContent>修改密码</TooltipContent>
+        </Tooltip>
         <span class="text-muted-foreground hidden max-w-32 truncate text-sm lg:inline">
           {{ auth.user?.name }}
         </span>
         <Tooltip>
           <TooltipTrigger as-child>
-            <!-- `lg:` 起才出现。顶栏是三列网格，两侧各占 1fr —— 多一个控件就会把
-                 右侧列撑得比 1fr 宽，在 768–1023px 那段把品牌名挤掉。
-                 窄屏上退不了帐是可接受的代价；控件摆不下不是。 -->
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              class="hidden lg:inline-flex"
-              aria-label="退出登录"
-              @click="signOut"
-            >
+            <Button variant="ghost" size="icon-sm" aria-label="退出登录" @click="signOut">
               <LogOut class="size-4" />
             </Button>
           </TooltipTrigger>

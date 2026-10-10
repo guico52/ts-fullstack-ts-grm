@@ -1,9 +1,12 @@
 {
   "name": "ts-fullstack-ts-grm",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "workspaces": ["frontend", "backend"],
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "dev": "bun run scripts/dev.ts",
     "dev:frontend": "bun run --filter @ts-fullstack-ts-grm/frontend dev",
@@ -11,10 +14,15 @@
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run --filter '*' test",
     "build": "bun run --filter @ts-fullstack-ts-grm/frontend build",
-    "check": "bun run typecheck && bun run test"
+    "check": "bun run --filter @ts-fullstack-ts-grm/backend check && bun run --filter @ts-fullstack-ts-grm/frontend check",
+    "test:integration": "bun run --filter @ts-fullstack-ts-grm/backend test:integration",
+    "db:deploy": "bun run --filter @ts-fullstack-ts-grm/backend db:deploy",
+    "test:e2e": "bun run --filter @ts-fullstack-ts-grm/frontend test:e2e"
   },
   "engines": {
-    "bun": ">=1.2.0"
+    "bun": ">=1.2.0",
+    "node": ">=24.11.0"
   },
-  "packageManager": "bun@1.3.14"
+  "packageManager": "bun@1.3.14",
+  "license": "Apache-2.0"
 }

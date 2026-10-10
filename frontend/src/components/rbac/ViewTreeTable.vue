@@ -16,7 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { findIcon } from "@/config/icons"
 import { columnClass, type ResourceColumn, type ResourceRow } from "@/lib/rbac"
 import { cn } from "@/lib/utils"
-import { flattenVisible, parentIds, type ViewTreeRow } from "@/lib/view-tree"
+import { flattenVisible, parentIds, hasTreeFields } from "@/lib/view-tree"
 
 /**
  * The view tree as a collapsible table.
@@ -73,7 +73,7 @@ function iconTone(row: ResourceRow): string {
 /** Nothing is remembered across loads; children of a freshly loaded tree open. */
 const collapsed = ref<Set<string>>(new Set())
 
-const treeRows = computed(() => props.rows as ViewTreeRow[])
+const treeRows = computed(() => props.rows.filter(hasTreeFields))
 const expanded = computed(() => {
   const open = parentIds(treeRows.value)
   for (const id of collapsed.value) open.delete(id)

@@ -26,16 +26,45 @@ describe("健康检查", () => {
   });
 });
 
+describe("开发接口文档与认证边界", () => {
+  it("Swagger 可匿名访问并声明 Bearer 授权", async () => {
+    if (
+      process.env.ENABLE_DOCS === "false" ||
+      (process.env.NODE_ENV === "production" &&
+        process.env.ENABLE_DOCS !== "true")
+    )
+      return;
+    expect((await request("/docs")).status).toBe(200);
+    const response = await request("/docs/json");
+    expect(response.status).toBe(200);
+    const spec = await response.json() as {
+      components: { securitySchemes: { bearerAuth: { scheme: string } } };
+      paths: { "/auth/login": { post: { security: unknown[] } } };
+    };
+    expect(spec.components.securitySchemes.bearerAuth.scheme).toBe("bearer");
+    expect(spec.paths["/auth/login"].post.security).toEqual([]);
+  });
+  it("业务路由不能因开放文档而匿名访问", async () => {
+    expect((await request("/rbac/users")).status).toBe(401);
+  });
+});
+
 describe("请求校验（不触达数据库）", () => {
   it("POST /rbac/organizations 拒绝空 name", async () => {
-    const response = await json("/rbac/organizations", "POST", { name: "  ", code: "A" });
+    const response = await json("/rbac/organizations", "POST", {
+      name: "  ",
+      code: "A",
+    });
     expect(response.status).toBe(422);
     // 统一错误体，而不是 Elysia 的默认校验响应。
     expect(await response.json()).toMatchObject({ code: "VALIDATION" });
   });
 
   it("POST /rbac/organizations 拒绝类型错误的 body", async () => {
-    const response = await json("/rbac/organizations", "POST", { name: 42, code: "B" });
+    const response = await json("/rbac/organizations", "POST", {
+      name: 42,
+      code: "B",
+    });
     expect(response.status).toBe(422);
   });
 
@@ -76,7 +105,10 @@ describe("请求校验（不触达数据库）", () => {
   });
 
   it("POST /rbac/roles 拒绝非数字的关联 id", async () => {
-    const response = await json("/rbac/roles", "POST", { name: "A", userIds: ["abc"] });
+    const response = await json("/rbac/roles", "POST", {
+      name: "A",
+      userIds: ["abc"],
+    });
     expect(response.status).toBe(422);
   });
 
@@ -87,8 +119,12 @@ describe("请求校验（不触达数据库）", () => {
 
   it("POST /auth/login 拒绝缺字段", async () => {
     expect((await json("/auth/login", "POST", {})).status).toBe(422);
-    expect((await json("/auth/login", "POST", { email: "a@b.com" })).status).toBe(422);
-    expect((await json("/auth/login", "POST", { password: "secret123" })).status).toBe(422);
+    expect(
+      (await json("/auth/login", "POST", { email: "a@b.com" })).status,
+    ).toBe(422);
+    expect(
+      (await json("/auth/login", "POST", { password: "secret123" })).status,
+    ).toBe(422);
   });
 
   it("POST /auth/login 拒绝不像邮箱的 email", async () => {
@@ -100,7 +136,10 @@ describe("请求校验（不触达数据库）", () => {
   });
 
   it("POST /auth/login 拒绝过短的口令", async () => {
-    const response = await json("/auth/login", "POST", { email: "a@b.com", password: "123" });
+    const response = await json("/auth/login", "POST", {
+      email: "a@b.com",
+      password: "123",
+    });
     expect(response.status).toBe(422);
   });
 });

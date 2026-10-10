@@ -105,16 +105,21 @@ function templateAst(file: string) {
  *  a heading, and a regex cannot tell the difference. */
 function domTags(file: string): string[] {
   const tags: string[] = []
-  // The template AST is a deep union of node shapes; walking it generically
-  // is the whole point of this helper, and narrowing at every level would
-  // be more code than the check it guards.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const visit = (node: any) => {
+  type TemplateAst = NonNullable<ReturnType<typeof templateAst>>
+  type TemplateNode = TemplateAst | TemplateAst["children"][number]
+  const visit = (node: TemplateNode | undefined): void => {
     if (!node) return
     if (node.type === 1) tags.push(node.tag)
-    for (const child of node.children ?? []) visit(child)
-    if (node.type === 1) {
-      for (const branch of node.branches ?? []) visit(branch.children?.[0])
+    switch (node.type) {
+      case 0: // Root
+      case 1: // Element
+      case 10: // IfBranch
+      case 11: // For
+        for (const child of node.children) visit(child)
+        break
+      case 9: // If
+        for (const branch of node.branches) visit(branch)
+        break
     }
   }
   visit(templateAst(file))
@@ -510,9 +515,14 @@ describe("documentation", () => {
   const slug = (text: string) =>
     text
       .toLowerCase()
-      .replace(/[^\w\s-]/g, "")
+      .replace(/[^\p{L}\p{M}\p{N}_\s-]/gu, "")
       .trim()
       .replace(/\s+/g, "-")
+
+  it("heading anchors preserve Chinese and remove punctuation", () => {
+    expect(slug("添加页面")).toBe("添加页面")
+    expect(slug("API 类型边界！")).toBe("api-类型边界")
+  })
 
   const headingsOf = (absolutePath: string) =>
     new Set(

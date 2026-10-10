@@ -15,6 +15,16 @@
 
 详见 [architecture.md](./architecture.md)、[workflow.md](./workflow.md)。
 
+### 类型约束
+
+- 内部数据、props、事件、回调、组件加载器和请求参数必须有对应的类型。优先使用 TypeScript 推导、后端 schema 推导类型和框架提供的类型；推导准确时不要求重复标注，也不手写一份重复的接口定义。
+- 通用资源使用 `src/lib/resource-types.ts` 中的 `ResourceRow`、`ResourceFormValues` 和 `FormFieldValue`；新增字段或资源时扩展对应 schema 和类型。组件加载器使用 `ViewModule`，控件事件使用控件导出的事件类型，不把已知结构写成 `any`、`unknown` 或宽泛的 `Record<string, unknown>`。
+- 非必要情况下禁止使用 `any`、`unknown`。不能为了消除类型错误把 `any` 换成 `unknown`，也不能通过 `as any`、`as never`、`as unknown as T` 或类型检查抑制绕过约束；应修正类型来源、收窄联合类型或完善适配器。
+- `unknown` 仅用于确实无法预知结构的边界，例如未经验证的 `JSON.parse` 结果、捕获的异常和外部库返回值。使用处须说明边界原因，通过 schema、类型守卫或属性检查完成验证和收窄，再传入内部业务代码；类型断言不能代替验证。
+- `any` 仅在第三方类型缺陷等无法合理消除的限制下允许局部例外，须在使用处说明原因和影响范围，封装后向业务层提供具体类型。已有 registry 组件中的例外不构成新代码放宽约束的理由。
+- 泛型用于保留真实的输入与输出关系，不作为逃避类型建模的替代品。测试故意传入非法数据时，可局部使用附有原因的 `@ts-expect-error`，同时验证静态拒绝与运行时处理；生产代码不得照搬。
+- TypeScript 检查不能证明每处 `unknown` 都必要；上述必要性、验证是否充分及例外范围由 code review 审查。
+
 ## 2. 公司身份和项目品牌
 
 - 每个页面通过应用 shell 保留 `AppTopbar`，居中、醒目地显示正规的公司全称，不能用项目名替代公司名。

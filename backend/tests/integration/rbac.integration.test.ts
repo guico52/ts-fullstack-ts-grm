@@ -7,10 +7,16 @@
  * 说明：`pool` 是全局单例，所以集成测试放在同一个文件里，只关一次池。
  */
 import { afterAll, describe, expect, it } from "bun:test";
+import { Elysia } from "elysia";
+import { permissionOptions } from "../../src/plugins/permission-catalog.ts";
 import { createApp } from "../../src/app.ts";
 import { close, pool } from "../../src/model/index.ts";
 import { ensureAdminUser } from "../../src/modules/rbac/user/bootstrap.ts";
-import { ROLE_ADMIN, ROLE_VIEWER, seedSystemData } from "../../src/modules/rbac/seed.ts";
+import {
+  ROLE_ADMIN,
+  ROLE_VIEWER,
+  seedSystemData,
+} from "../../src/modules/rbac/seed.ts";
 
 const enabled = process.env.PG_INTEGRATION === "1";
 // 加时间戳，避免多次运行时相互冲突。
@@ -22,7 +28,7 @@ const app = createApp();
 /**
  * 业务路由现在都过 `authGuard` + `permissionGuard`，所以测试得有个身份。
  *
- * 用内置的 admin 登录一次，之后 `call` 自动带上它的 token。凭据来自 `.env`
+ * 先初始化管理员与默认数据，再登录一次，之后 `call` 自动带上它的 token。凭据来自 `.env`
  * （`ADMIN_EMAIL` / `ADMIN_PWD`）—— 测试本来就依赖 `.env` 里的数据库连接，
  * 再依赖这一对不算多。
  *
@@ -36,7 +42,9 @@ function call(path: string, init: RequestInit = {}) {
   if (adminToken && !headers.has("authorization")) {
     headers.set("authorization", `Bearer ${adminToken}`);
   }
-  return app.handle(new Request(`http://localhost${path}`, { ...init, headers }));
+  return app.handle(
+    new Request(`http://localhost${path}`, { ...init, headers }),
+  );
 }
 
 function send(path: string, method: string, body: unknown) {
@@ -51,6 +59,8 @@ function json<T>(response: Response): Promise<T> {
 }
 
 if (enabled) {
+  await app.decorator.permissionCatalog.start(app.routes);
+  await seedSystemData();
   const response = await app.handle(
     new Request("http://localhost/auth/login", {
       method: "POST",
@@ -62,16 +72,21 @@ if (enabled) {
     }),
   );
   if (!response.ok) {
-    throw new Error(`集成测试无法以 admin 登录（${response.status}），检查 .env 的 ADMIN_*`);
+    throw new Error(
+      `集成测试无法以 admin 登录（${response.status}），检查 .env 的 ADMIN_*`,
+    );
   }
   adminToken = ((await response.json()) as { token: string }).token;
 }
 
 describe.skipIf(!enabled)("rbac（真实 pg）", () => {
   async function createOrganization(code: string) {
-    return json<{ id: string; name: string; code: string; logo: string | null }>(
-      await send("/rbac/organizations", "POST", { name: "IT-组织", code }),
-    );
+    return json<{
+      id: string;
+      name: string;
+      code: string;
+      logo: string | null;
+    }>(await send("/rbac/organizations", "POST", { name: "IT-组织", code }));
   }
 
   afterAll(async () => {
@@ -86,10 +101,16 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
       "DELETE FROM sys_role_permission_mapping WHERE role_id IN (SELECT id FROM sys_role WHERE name LIKE 'IT-%')",
     );
     await pool.query("DELETE FROM sys_role WHERE name LIKE 'IT-%'");
-    await pool.query("DELETE FROM sys_user WHERE email LIKE 'it-%@example.com'");
-    await pool.query("DELETE FROM sys_view WHERE name LIKE 'IT-%' OR path LIKE '/it-%'");
-    await pool.query("DELETE FROM sys_permission WHERE name LIKE 'IT-%'");
-    await pool.query("DELETE FROM sys_organization WHERE code LIKE 'IT-%' OR code LIKE 'ORG-%'");
+    await pool.query(
+      "DELETE FROM sys_user WHERE email LIKE 'it-%@example.com'",
+    );
+    await pool.query(
+      "DELETE FROM sys_view WHERE name LIKE 'IT-%' OR path LIKE '/it-%'",
+    );
+    await pool.query("DELETE FROM sys_permission WHERE code LIKE 'IT-%'");
+    await pool.query(
+      "DELETE FROM sys_organization WHERE code LIKE 'IT-%' OR code LIKE 'ORG-%'",
+    );
   });
 
   it("organization：创建 → 读回 → 局部更新 → 软删除 → 再查不到", async () => {
@@ -100,7 +121,12 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
       logo: "https://example.com/logo.png",
     });
     expect(created.status).toBe(201);
-    const organization = await json<{ id: string; name: string; code: string; logo: string | null }>(created);
+    const organization = await json<{
+      id: string;
+      name: string;
+      code: string;
+      logo: string | null;
+    }>(created);
     expect(organization.id).toMatch(/^\d+$/);
 
     const list = await json<{ data: Array<{ id: string }> }>(
@@ -110,34 +136,109 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
 
     // 省略字段保留原值。
     const patched = await json<typeof organization>(
-      await send(`/rbac/organizations/${organization.id}`, "PATCH", { name: "改名" }),
+      await send(`/rbac/organizations/${organization.id}`, "PATCH", {
+        name: "改名",
+      }),
     );
     expect(patched.name).toBe("改名");
     expect(patched.logo).toBe("https://example.com/logo.png");
 
     // 显式 null 才置空。
     const cleared = await json<typeof organization>(
-      await send(`/rbac/organizations/${organization.id}`, "PATCH", { logo: null }),
+      await send(`/rbac/organizations/${organization.id}`, "PATCH", {
+        logo: null,
+      }),
     );
     expect(cleared.logo).toBeNull();
 
-    expect((await call(`/rbac/organizations/${organization.id}`, { method: "DELETE" })).status).toBe(200);
-    expect((await call(`/rbac/organizations/${organization.id}`)).status).toBe(404);
+    expect(
+      (
+        await call(`/rbac/organizations/${organization.id}`, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(200);
+    expect((await call(`/rbac/organizations/${organization.id}`)).status).toBe(
+      404,
+    );
 
-    const missing = await send("/rbac/organizations/999999999", "PATCH", { name: "x" });
+    const missing = await send("/rbac/organizations/999999999", "PATCH", {
+      name: "x",
+    });
     expect(missing.status).toBe(404);
   });
 
-  it("permission：创建 → 改名 → 软删除", async () => {
-    const created = await send("/rbac/permissions", "POST", { name: `IT-权限-${STAMP}` });
+  it("权限迁移保留标识、ID 和角色关联", async () => {
+    const session = await pool.connect();
+    try {
+      await session.query("BEGIN");
+      await session.query(`CREATE SCHEMA permission_upgrade_${STAMP}`);
+      await session.query(`SET LOCAL search_path TO permission_upgrade_${STAMP}`);
+      await session.query("CREATE TABLE sys_permission (id bigint PRIMARY KEY, name text NOT NULL)");
+      await session.query("CREATE TABLE sys_role_permission_mapping (role_id bigint, permission_id bigint REFERENCES sys_permission(id))");
+      await session.query("INSERT INTO sys_permission VALUES (42, 'book.book.read')");
+      await session.query("INSERT INTO sys_role_permission_mapping VALUES (7, 42)");
+      const sql = await Bun.file(new URL("../../migrations/20261011090000001_permission_metadata.sql", import.meta.url)).text();
+      await session.query(sql);
+      const result = await session.query("SELECT p.*, m.role_id FROM sys_permission p JOIN sys_role_permission_mapping m ON m.permission_id=p.id");
+      expect(result.rows[0]).toEqual({ id: "42", code: "book.book.read", url: null, method: null, deprecated: false, role_id: "7" });
+    } finally {
+      await session.query("ROLLBACK");
+      session.release();
+    }
+  });
+
+  it("权限 code 唯一，同一路由可以绑定不同 method", async () => {
+    const body = { code: `IT-endpoint-${STAMP}`, url: `/it/${STAMP}`, method: "GET" };
+    const created = await send("/rbac/permissions", "POST", body);
     expect(created.status).toBe(201);
-    const permission = await json<{ id: string; name: string }>(created);
+    const permission = await json<{ id: string; code: string }>(created);
+    expect(permission).not.toHaveProperty("name");
+    expect((await send("/rbac/permissions", "POST", { code: body.code })).status).toBe(409);
+    expect((await send("/rbac/permissions", "POST", { ...body, code: `IT-duplicate-${STAMP}` })).status).toBe(409);
+    expect((await send("/rbac/permissions", "POST", { ...body, code: `IT-post-${STAMP}`, method: "POST" })).status).toBe(201);
+    const cleared = await send(`/rbac/permissions/${permission.id}`, "PATCH", { url: null, method: null });
+    expect(cleared.status).toBe(200);
+    expect(await cleared.json()).toMatchObject({ url: null, method: null });
+  });
 
-    const patched = await send(`/rbac/permissions/${permission.id}`, "PATCH", { name: `IT-改名-${STAMP}` });
+  it("废弃权限失效但保留角色授权关系", async () => {
+    const permission = (await pool.query("SELECT id FROM sys_permission WHERE code='book.book.read'")).rows[0];
+    const count = async () => (await pool.query("SELECT count(*)::int AS n FROM sys_role_permission_mapping WHERE permission_id=$1", [permission.id])).rows[0].n;
+    const before = await count();
+    try {
+      expect((await send(`/rbac/permissions/${permission.id}`, "PATCH", { deprecated: true })).status).toBe(200);
+      expect((await call("/book/books")).status).toBe(403);
+      expect((await json<{ permissions: string[] }>(await call("/auth/me/access"))).permissions).not.toContain("book.book.read");
+      expect(await count()).toBe(before);
+      await pool.query("UPDATE sys_permission SET deleted_at=now() WHERE id=$1", [permission.id]);
+      await seedSystemData();
+      expect((await pool.query("SELECT deleted_at FROM sys_permission WHERE id=$1", [permission.id])).rows[0].deleted_at).not.toBeNull();
+    } finally {
+      await pool.query("UPDATE sys_permission SET deprecated=false, deleted_at=null WHERE id=$1", [permission.id]);
+    }
+    expect((await call("/book/books")).status).toBe(200);
+  });
+
+  it("permission：创建 → 改标识 → 软删除", async () => {
+    const created = await send("/rbac/permissions", "POST", {
+      code: `IT-权限-${STAMP}`,
+    });
+    expect(created.status).toBe(201);
+    const permission = await json<{ id: string; code: string }>(created);
+
+    const patched = await send(`/rbac/permissions/${permission.id}`, "PATCH", {
+      code: `IT-改标识-${STAMP}`,
+    });
     expect(patched.status).toBe(200);
-    expect((await json<{ name: string }>(patched)).name).toBe(`IT-改名-${STAMP}`);
+    expect((await json<{ code: string }>(patched)).code).toBe(
+      `IT-改标识-${STAMP}`,
+    );
 
-    expect((await call(`/rbac/permissions/${permission.id}`, { method: "DELETE" })).status).toBe(200);
+    expect(
+      (await call(`/rbac/permissions/${permission.id}`, { method: "DELETE" }))
+        .status,
+    ).toBe(200);
     expect((await call(`/rbac/permissions/${permission.id}`)).status).toBe(404);
   });
 
@@ -151,15 +252,35 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
       organizationId: org.id,
     });
     expect(created.status).toBe(201);
-    const user = await json<{ id: string; organization: { id: string; name: string } }>(created);
+    const user = await json<{
+      id: string;
+      organization: { id: string; name: string };
+    }>(created);
     expect(user.organization.id).toBe(org.id);
     // 口令不出现在任何响应里。
     expect(JSON.stringify(user)).not.toContain("pwd");
 
-    const patched = await json<{ organization: { id: string } }>(
-      await send(`/rbac/users/${user.id}`, "PATCH", { password: "another-pass" }),
-    );
-    expect(patched.organization.id).toBe(org.id);
+    expect(
+      (
+        await send(`/rbac/users/${user.id}`, "PATCH", {
+          password: "another-pass",
+        })
+      ).status,
+    ).toBe(422);
+    expect(
+      (
+        await send(`/rbac/users/${user.id}/password`, "POST", {
+          newPassword: "another-pass",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await json<{ organization: { id: string } }>(
+          await call(`/rbac/users/${user.id}`),
+        )
+      ).organization.id,
+    ).toBe(org.id);
 
     // 引用不存在的组织 → 外键错误被分类成 422。
     const badRef = await send("/rbac/users", "POST", {
@@ -169,12 +290,18 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
       organizationId: "999999999",
     });
     expect(badRef.status).toBe(422);
-    expect(await json<{ code: string }>(badRef)).toMatchObject({ code: "INVALID_REFERENCE" });
+    expect(await json<{ code: string }>(badRef)).toMatchObject({
+      code: "INVALID_REFERENCE",
+    });
   });
 
   it("view：菜单 → 页面 → 按钮，层级由 parentId 表达", async () => {
     const menu = await json<{ id: string; type: string; path: string | null }>(
-      await send("/rbac/views", "POST", { name: "IT-菜单", icon: "folder", type: "MENU" }),
+      await send("/rbac/views", "POST", {
+        name: "IT-菜单",
+        icon: "folder",
+        type: "MENU",
+      }),
     );
     // 菜单是分组节点：不承载组件，也没有路由。
     expect(menu.path).toBeNull();
@@ -229,7 +356,11 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
 
   it("view：层级不合法一律 422", async () => {
     const menu = await json<{ id: string }>(
-      await send("/rbac/views", "POST", { name: "IT-层级菜单", icon: "folder", type: "MENU" }),
+      await send("/rbac/views", "POST", {
+        name: "IT-层级菜单",
+        icon: "folder",
+        type: "MENU",
+      }),
     );
     const page = await json<{ id: string }>(
       await send("/rbac/views", "POST", {
@@ -241,9 +372,18 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
     );
 
     const cases: Array<{ why: string; body: Record<string, unknown> }> = [
-      { why: "页面挂在页面下", body: { name: "x", icon: "i", type: "VIEW", parentId: page.id } },
-      { why: "按钮挂在菜单下（跨层）", body: { name: "x", icon: "i", type: "BUTTON", parentId: menu.id } },
-      { why: "菜单有上级", body: { name: "x", icon: "i", type: "MENU", parentId: menu.id } },
+      {
+        why: "页面挂在页面下",
+        body: { name: "x", icon: "i", type: "VIEW", parentId: page.id },
+      },
+      {
+        why: "按钮挂在菜单下（跨层）",
+        body: { name: "x", icon: "i", type: "BUTTON", parentId: menu.id },
+      },
+      {
+        why: "菜单有上级",
+        body: { name: "x", icon: "i", type: "MENU", parentId: menu.id },
+      },
       { why: "按钮没有上级", body: { name: "x", icon: "i", type: "BUTTON" } },
     ];
     for (const { why, body } of cases) {
@@ -255,22 +395,40 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
     }
 
     // 只改类型也会被拦：页面降级成按钮后，上级仍是菜单，组合不成立。
-    const demoted = await send(`/rbac/views/${page.id}`, "PATCH", { type: "BUTTON" });
+    const demoted = await send(`/rbac/views/${page.id}`, "PATCH", {
+      type: "BUTTON",
+    });
     expect(demoted.status).toBe(422);
-    expect(await json<{ code: string }>(demoted)).toMatchObject({ code: "INVALID_HIERARCHY" });
+    expect(await json<{ code: string }>(demoted)).toMatchObject({
+      code: "INVALID_HIERARCHY",
+    });
 
     // 枚举本身的校验先于业务规则。
-    const badType = await send("/rbac/views", "POST", { name: "x", icon: "i", type: "NOPE" });
+    const badType = await send("/rbac/views", "POST", {
+      name: "x",
+      icon: "i",
+      type: "NOPE",
+    });
     expect(badType.status).toBe(422);
-    expect(await json<{ code: string }>(badType)).toMatchObject({ code: "VALIDATION" });
+    expect(await json<{ code: string }>(badType)).toMatchObject({
+      code: "VALIDATION",
+    });
   });
 
   it("view：排序按层级自动递增，显式值优先", async () => {
     const menuA = await json<{ id: string; sort: number }>(
-      await send("/rbac/views", "POST", { name: "IT-排序A", icon: "i", type: "MENU" }),
+      await send("/rbac/views", "POST", {
+        name: "IT-排序A",
+        icon: "i",
+        type: "MENU",
+      }),
     );
     const menuB = await json<{ id: string; sort: number }>(
-      await send("/rbac/views", "POST", { name: "IT-排序B", icon: "i", type: "MENU" }),
+      await send("/rbac/views", "POST", {
+        name: "IT-排序B",
+        icon: "i",
+        type: "MENU",
+      }),
     );
     // 同一层：后者接着前者。用相对值断言，因为库里的顶层节点不止这两个。
     expect(menuB.sort).toBe(menuA.sort + 1);
@@ -297,14 +455,23 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
 
     // 显式排序不被覆盖。
     const explicit = await json<{ sort: number }>(
-      await send("/rbac/views", "POST", { name: "IT-排序显式", icon: "i", type: "MENU", sort: 99 }),
+      await send("/rbac/views", "POST", {
+        name: "IT-排序显式",
+        icon: "i",
+        type: "MENU",
+        sort: 99,
+      }),
     );
     expect(explicit.sort).toBe(99);
   });
 
   it("view：从页面改成菜单会清空组件与路由", async () => {
     const menu = await json<{ id: string }>(
-      await send("/rbac/views", "POST", { name: "IT-清空菜单", icon: "folder", type: "MENU" }),
+      await send("/rbac/views", "POST", {
+        name: "IT-清空菜单",
+        icon: "folder",
+        type: "MENU",
+      }),
     );
     const page = await json<{
       id: string;
@@ -347,10 +514,16 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
       password: "secret123",
       organizationId: org.id,
     });
-    const user = await json<{ id: string; organization: { id: string } | null }>(created);
+    const user = await json<{
+      id: string;
+      organization: { id: string } | null;
+    }>(created);
     expect(user.organization?.id).toBe(org.id);
 
-    expect((await call(`/rbac/organizations/${org.id}`, { method: "DELETE" })).status).toBe(200);
+    expect(
+      (await call(`/rbac/organizations/${org.id}`, { method: "DELETE" }))
+        .status,
+    ).toBe(200);
 
     const after = await json<typeof user>(await call(`/rbac/users/${user.id}`));
     expect(after.organization).toBeNull();
@@ -367,7 +540,11 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
       }),
     );
     const viewMenu = await json<{ id: string }>(
-      await send("/rbac/views", "POST", { name: "IT-角色菜单", icon: "folder", type: "MENU" }),
+      await send("/rbac/views", "POST", {
+        name: "IT-角色菜单",
+        icon: "folder",
+        type: "MENU",
+      }),
     );
     const view = await json<{ id: string }>(
       await send("/rbac/views", "POST", {
@@ -381,7 +558,7 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
       }),
     );
     const permission = await json<{ id: string }>(
-      await send("/rbac/permissions", "POST", { name: `IT-角色权限-${STAMP}` }),
+      await send("/rbac/permissions", "POST", { code: `IT-角色权限-${STAMP}` }),
     );
 
     const created = await send("/rbac/roles", "POST", {
@@ -402,12 +579,16 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
     expect(role.permissions.map((r) => r.id)).toEqual([permission.id]);
 
     // 只传 viewIds：视图关联被清空，用户与权限关联原样保留。
-    const patched = await json<typeof role>(await send(`/rbac/roles/${role.id}`, "PATCH", { viewIds: [] }));
+    const patched = await json<typeof role>(
+      await send(`/rbac/roles/${role.id}`, "PATCH", { viewIds: [] }),
+    );
     expect(patched.views).toEqual([]);
     expect(patched.users.map((r) => r.id)).toEqual([user.id]);
     expect(patched.permissions.map((r) => r.id)).toEqual([permission.id]);
 
-    expect((await call(`/rbac/roles/${role.id}`, { method: "DELETE" })).status).toBe(200);
+    expect(
+      (await call(`/rbac/roles/${role.id}`, { method: "DELETE" })).status,
+    ).toBe(200);
     expect((await call(`/rbac/roles/${role.id}`)).status).toBe(404);
   });
 });
@@ -429,15 +610,21 @@ describe.skipIf(!enabled)("book（真实 pg）", () => {
     send("/book/authors", "POST", { name: `IT-${name}-${STAMP}` });
 
   it("store：创建 → 改名 → 软删除 → 再查不到", async () => {
-    const created = await json<{ id: string; name: string }>(await createStore("书店"));
+    const created = await json<{ id: string; name: string }>(
+      await createStore("书店"),
+    );
     expect(created.name).toBe(`IT-书店-${STAMP}`);
 
     const renamed = await json<{ name: string }>(
-      await send(`/book/stores/${created.id}`, "PATCH", { name: `IT-改名-${STAMP}` }),
+      await send(`/book/stores/${created.id}`, "PATCH", {
+        name: `IT-改名-${STAMP}`,
+      }),
     );
     expect(renamed.name).toBe(`IT-改名-${STAMP}`);
 
-    expect((await call(`/book/stores/${created.id}`, { method: "DELETE" })).status).toBe(200);
+    expect(
+      (await call(`/book/stores/${created.id}`, { method: "DELETE" })).status,
+    ).toBe(200);
     expect((await call(`/book/stores/${created.id}`)).status).toBe(404);
   });
 
@@ -465,7 +652,9 @@ describe.skipIf(!enabled)("book（真实 pg）", () => {
     expect(book.price).toBe(42.5);
     expect(typeof book.price).toBe("number");
     expect(book.store.id).toBe(store.id);
-    expect(book.authors.map((a) => a.id).sort()).toEqual([first.id, second.id].sort());
+    expect(book.authors.map((a) => a.id).sort()).toEqual(
+      [first.id, second.id].sort(),
+    );
 
     // 传了 authorIds 就整体替换。
     const replaced = await json<typeof book>(
@@ -475,12 +664,16 @@ describe.skipIf(!enabled)("book（真实 pg）", () => {
 
     // 没传 authorIds 就原样保留，只改名称。
     const renamed = await json<typeof book>(
-      await send(`/book/books/${book.id}`, "PATCH", { name: `IT-图书改名-${STAMP}` }),
+      await send(`/book/books/${book.id}`, "PATCH", {
+        name: `IT-图书改名-${STAMP}`,
+      }),
     );
     expect(renamed.name).toBe(`IT-图书改名-${STAMP}`);
     expect(renamed.authors.map((a) => a.id)).toEqual([second.id]);
 
-    expect((await call(`/book/books/${book.id}`, { method: "DELETE" })).status).toBe(200);
+    expect(
+      (await call(`/book/books/${book.id}`, { method: "DELETE" })).status,
+    ).toBe(200);
     expect((await call(`/book/books/${book.id}`)).status).toBe(404);
   });
 
@@ -492,7 +685,9 @@ describe.skipIf(!enabled)("book（真实 pg）", () => {
       storeId: "99999999",
     });
     expect(response.status).toBe(422);
-    expect((await json<{ code: string }>(response)).code).toBe("INVALID_REFERENCE");
+    expect((await json<{ code: string }>(response)).code).toBe(
+      "INVALID_REFERENCE",
+    );
   });
 
   it("book：edition 传字符串返回 422", async () => {
@@ -528,8 +723,12 @@ describe.skipIf(!enabled)("book（真实 pg）", () => {
 
     // 全局过滤器按列名注册，**关联查询也被它管着**：软删除书店与作者后，
     // 书还是那本书，但两边的引用都读不出来了。
-    expect((await call(`/book/stores/${store.id}`, { method: "DELETE" })).status).toBe(200);
-    expect((await call(`/book/authors/${author.id}`, { method: "DELETE" })).status).toBe(200);
+    expect(
+      (await call(`/book/stores/${store.id}`, { method: "DELETE" })).status,
+    ).toBe(200);
+    expect(
+      (await call(`/book/authors/${author.id}`, { method: "DELETE" })).status,
+    ).toBe(200);
 
     const after = await json<typeof book>(await call(`/book/books/${book.id}`));
     // 契约里写明了可能是 null —— store_id 仍是那本书的，只是指向的行没了。
@@ -541,8 +740,12 @@ describe.skipIf(!enabled)("book（真实 pg）", () => {
 
 describe.skipIf(!enabled)("auth（真实 pg）", () => {
   afterAll(async () => {
-    await pool.query("DELETE FROM sys_user WHERE email LIKE 'it-%@example.com'");
-    await pool.query("DELETE FROM sys_organization WHERE code LIKE 'IT-%' OR code LIKE 'ORG-%'");
+    await pool.query(
+      "DELETE FROM sys_user WHERE email LIKE 'it-%@example.com'",
+    );
+    await pool.query(
+      "DELETE FROM sys_organization WHERE code LIKE 'IT-%' OR code LIKE 'ORG-%'",
+    );
   });
 
   const EMAIL = `it-login-${STAMP}@example.com`;
@@ -569,13 +772,22 @@ describe.skipIf(!enabled)("auth（真实 pg）", () => {
   it("login：正确凭据拿到本人，响应里没有哈希", async () => {
     await makeUser();
 
-    const response = await send("/auth/login", "POST", { email: EMAIL, password: PASSWORD });
+    const response = await send("/auth/login", "POST", {
+      email: EMAIL,
+      password: PASSWORD,
+    });
     expect(response.status).toBe(200);
 
     const session = await json<Record<string, unknown>>(response);
     expect(session).toMatchObject({ name: "IT-登录用户", email: EMAIL });
     // 字段集合本身就是要断言的东西：多一个 pwdHash 就是泄了口令。
-    expect(Object.keys(session).sort()).toEqual(["email", "id", "name", "token"]);
+    expect(Object.keys(session).sort()).toEqual([
+      "email",
+      "id",
+      "mustChangePassword",
+      "name",
+      "token",
+    ]);
     // token 是三段式 JWT，不是随便一个字符串。
     expect(String(session.token).split(".")).toHaveLength(3);
   });
@@ -598,63 +810,72 @@ describe.skipIf(!enabled)("auth（真实 pg）", () => {
 });
 
 describe.skipIf(!enabled)("bootstrap（真实 pg）", () => {
-  afterAll(async () => {
-    await pool.query("DELETE FROM sys_user WHERE name LIKE 'it-admin%'");
+  it("持久标记使改名、撤销角色、软删除后 seed 都不重建或恢复", async () => {
+    const initial = (
+      await pool.query("SELECT * FROM sys_user WHERE initial_admin = true")
+    ).rows[0];
+    const memberships = (
+      await pool.query(
+        "SELECT role_id FROM sys_role_user_mapping WHERE user_id = $1",
+        [initial.id],
+      )
+    ).rows;
+    try {
+      await pool.query(
+        "UPDATE sys_user SET name = 'renamed-admin', deleted_at = now() WHERE id = $1",
+        [initial.id],
+      );
+      await pool.query("DELETE FROM sys_role_user_mapping WHERE user_id = $1", [
+        initial.id,
+      ]);
+      await seedSystemData({
+        email: "changed@example.com",
+        password: "another-secret",
+      });
+      expect(
+        (
+          await pool.query(
+            "SELECT COUNT(*)::int AS count FROM sys_user WHERE initial_admin = true",
+          )
+        ).rows[0].count,
+      ).toBe(1);
+      expect(
+        (
+          await pool.query(
+            "SELECT * FROM sys_role_user_mapping WHERE user_id = $1",
+            [initial.id],
+          )
+        ).rows,
+      ).toHaveLength(0);
+      const after = (
+        await pool.query("SELECT * FROM sys_user WHERE id = $1", [initial.id])
+      ).rows[0];
+      expect(after.name).toBe("renamed-admin");
+      expect(after.email).toBe(initial.email);
+      expect(after.pwd_hash).toBe(initial.pwd_hash);
+      expect(after.deleted_at).not.toBeNull();
+    } finally {
+      await pool.query(
+        "UPDATE sys_user SET name = $2, deleted_at = $3 WHERE id = $1",
+        [initial.id, initial.name, initial.deleted_at],
+      );
+      for (const membership of memberships)
+        await pool.query(
+          "INSERT INTO sys_role_user_mapping (role_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+          [membership.role_id, initial.id],
+        );
+    }
   });
-
-  const ADMIN = `it-admin-${STAMP}`;
-
-  it("没有该名字的账号时创建，已有则不覆盖", async () => {
-    const options = {
-      name: ADMIN,
-      email: `${ADMIN}@example.com`,
-      password: "admin-secret-123",
-    };
-    await ensureAdminUser(options);
-
-    const created = await pool.query("SELECT id, email, organization_id FROM sys_user WHERE name = $1", [
-      ADMIN,
-    ]);
-    expect(created.rows).toHaveLength(1);
-
-    // 建出来的是一条**能用的凭据**，不只是行数据。
-    const login = await send("/auth/login", "POST", {
-      email: options.email,
-      password: options.password,
-    });
-    expect(login.status).toBe(200);
-
-    // 再跑一次，故意换一个邮箱与口令：已存在的那一行不该被动。
-    await ensureAdminUser({ name: ADMIN, email: "changed@example.com", password: "another-secret" });
-    const again = await pool.query("SELECT email FROM sys_user WHERE name = $1", [ADMIN]);
-    expect(again.rows).toHaveLength(1);
-    expect(again.rows[0].email).toBe(options.email);
-    // 原口令仍然有效，新口令无效——说明口令也没被覆盖。
-    expect(
-      (
-        await send("/auth/login", "POST", { email: options.email, password: options.password })
-      ).status,
-    ).toBe(200);
-    expect(
-      (
-        await send("/auth/login", "POST", { email: options.email, password: "another-secret" })
-      ).status,
-    ).toBe(401);
-  });
-
-  it("新建的管理员挂在一个真实存在的组织下", async () => {
+  it("初始化管理员属于真实组织，重复初始化保留凭据", async () => {
     await ensureAdminUser({
-      name: `${ADMIN}-2`,
-      email: `it-admin2-${STAMP}@example.com`,
-      password: "admin-secret-123",
+      email: "changed@example.com",
+      password: "another-secret",
     });
-
-    // users.organization_id 是 NOT NULL，所以初始化必须自己解决组织。
     const joined = await pool.query(
-      "SELECT o.id FROM sys_user u JOIN sys_organization o ON o.id = u.organization_id WHERE u.name = $1",
-      [`${ADMIN}-2`],
+      "SELECT u.email FROM sys_user u JOIN sys_organization o ON o.id = u.organization_id WHERE u.initial_admin = true",
     );
     expect(joined.rows).toHaveLength(1);
+    expect(joined.rows[0].email).toBe(process.env.ADMIN_EMAIL);
   });
 });
 
@@ -665,6 +886,26 @@ describe.skipIf(!enabled)("seed（真实 pg）", () => {
    * seed 建出来的视图、权限与角色就是系统要用的原始数据，不是测试垃圾；
    * 它幂等，重跑只会补缺，不会改已有行。删掉它们反而会把开发库弄坏。
    */
+
+  it("默认视图包含总览与全部系统管理页面", async () => {
+    const { rows } = await pool.query(
+      "SELECT path FROM sys_view WHERE deleted_at IS NULL AND type = 'VIEW'",
+    );
+    const paths = rows.map((row) => row.path);
+    for (const path of [
+      "/",
+      "/system/organizations",
+      "/system/users",
+      "/system/views",
+      "/system/roles",
+      "/system/permissions",
+      "/library/books",
+      "/library/authors",
+      "/library/stores",
+    ]) {
+      expect(paths).toContain(path);
+    }
+  });
 
   it("第二次调用不新建任何东西", async () => {
     await seedSystemData();
@@ -682,10 +923,36 @@ describe.skipIf(!enabled)("seed（真实 pg）", () => {
     expect(after).toEqual(before);
   });
 
+  it("超过 100 个视图时重跑仍幂等", async () => {
+    const inserted = await pool.query(
+      "INSERT INTO sys_view (name, icon, type, sort) SELECT 'IT-page-limit-' || n, 'File', 'VIEW', 0 FROM generate_series(1,105) n RETURNING id",
+    );
+    try {
+      const before = (
+        await pool.query(
+          "SELECT count(*)::int AS count FROM sys_view WHERE deleted_at IS NULL",
+        )
+      ).rows[0].count;
+      await seedSystemData();
+      expect(
+        (
+          await pool.query(
+            "SELECT count(*)::int AS count FROM sys_view WHERE deleted_at IS NULL",
+          )
+        ).rows[0].count,
+      ).toBe(before);
+    } finally {
+      await pool.query("DELETE FROM sys_view WHERE id = ANY($1::bigint[])", [
+        inserted.rows.map((r) => r.id),
+      ]);
+    }
+  });
+
   it("管理员拿到全部视图与全部权限", async () => {
     await seedSystemData();
 
-    const { rows } = await pool.query(`
+    const { rows } = await pool.query(
+      `
       SELECT (SELECT count(*)::int FROM sys_view WHERE deleted_at IS NULL) views,
              (SELECT count(*)::int FROM sys_permission WHERE deleted_at IS NULL) perms,
              (SELECT count(*)::int FROM sys_role_view_mapping m
@@ -703,14 +970,18 @@ describe.skipIf(!enabled)("seed（真实 pg）", () => {
     await seedSystemData();
 
     const permissions = await pool.query(
-      `SELECT p.name FROM sys_role_permission_mapping m
+      `SELECT p.code FROM sys_role_permission_mapping m
          JOIN sys_permission p ON p.id = m.permission_id
          JOIN sys_role r ON r.id = m.role_id
-        WHERE r.name = $1 ORDER BY p.name`,
+        WHERE r.name = $1 ORDER BY p.code`,
       [ROLE_VIEWER],
     );
     // “不能删除和修改”就是这份清单的**形状**：只有 read。
-    expect(permissions.rows.map((row) => row.name)).toEqual(["book.author.read", "book.book.read", "book.store.read"]);
+    expect(permissions.rows.map((row) => row.code)).toEqual([
+      "book.author.read",
+      "book.book.read",
+      "book.store.read",
+    ]);
 
     const views = await pool.query(
       `SELECT v.name FROM sys_role_view_mapping m
@@ -724,7 +995,13 @@ describe.skipIf(!enabled)("seed（真实 pg）", () => {
     expect(names).toEqual(["图书管理", "图书", "作者", "书店"].sort());
 
     // “不可访问系统管理页面”同样是一个否定断言：一个都不能在。
-    const systemPages = ["系统管理", "用户管理", "视图管理", "角色管理", "权限管理"];
+    const systemPages = [
+      "系统管理",
+      "用户管理",
+      "视图管理",
+      "角色管理",
+      "权限管理",
+    ];
     expect(names.filter((name) => systemPages.includes(name))).toEqual([]);
   });
 });
@@ -750,19 +1027,30 @@ describe.skipIf(!enabled)("鉴权与授权（真实 pg）", () => {
     return body.token;
   }
 
-  const asBearer = (token: string) => ({ headers: { authorization: `Bearer ${token}` } });
+  const asBearer = (token: string) => ({
+    headers: { authorization: `Bearer ${token}` },
+  });
 
   /** 带 token 的写请求。`send` 不带 headers，所以这里手写一份。 */
-  const authSend = (token: string, path: string, method: string, body: unknown) =>
+  const authSend = (
+    token: string,
+    path: string,
+    method: string,
+    body: unknown,
+  ) =>
     call(path, {
       method,
-      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify(body),
     });
 
   it("没有凭据访问业务路由一律 401，/health 不受影响", async () => {
     // 绕过 `call`：它会给每个请求带上 admin 的 token，而这一条要的正是“没有”。
-    const anonymous = (path: string) => app.handle(new Request(`http://localhost${path}`));
+    const anonymous = (path: string) =>
+      app.handle(new Request(`http://localhost${path}`));
 
     expect((await anonymous("/rbac/views")).status).toBe(401);
     expect((await anonymous("/book/books")).status).toBe(401);
@@ -770,19 +1058,27 @@ describe.skipIf(!enabled)("鉴权与授权（真实 pg）", () => {
   });
 
   it("坏 token 也是 401，而不是当成匿名放行", async () => {
-    expect((await call("/rbac/views", { headers: { authorization: "Bearer nonsense" } })).status).toBe(
-      401,
-    );
+    expect(
+      (
+        await call("/rbac/views", {
+          headers: { authorization: "Bearer nonsense" },
+        })
+      ).status,
+    ).toBe(401);
   });
 
   it("管理员带 token 能读业务路由，也拿得到自己的可达集合", async () => {
-    const token = await login("admin@example.com", process.env.ADMIN_PWD ?? "");
+    const token = await login(
+      process.env.ADMIN_EMAIL ?? "admin@example.com",
+      process.env.ADMIN_PWD ?? "",
+    );
 
     expect((await call("/rbac/views", asBearer(token))).status).toBe(200);
 
-    const access = await json<{ views: Array<{ path: string | null }>; permissions: string[] }>(
-      await call("/auth/me/access", asBearer(token)),
-    );
+    const access = await json<{
+      views: Array<{ path: string | null }>;
+      permissions: string[];
+    }>(await call("/auth/me/access", asBearer(token)));
     // 管理员角色是“全部”，所以这两个数字应当与库里的一致。
     const counts = await pool.query(
       `SELECT (SELECT count(*)::int FROM sys_view WHERE deleted_at IS NULL) views,
@@ -791,7 +1087,9 @@ describe.skipIf(!enabled)("鉴权与授权（真实 pg）", () => {
     expect(access.views).toHaveLength(counts.rows[0].views);
     expect(access.permissions).toHaveLength(counts.rows[0].perms);
     // 前端拿它配路由，重复的 path 会让 addRoute 抛错。
-    const paths = access.views.map((view) => view.path).filter((path) => path !== null);
+    const paths = access.views
+      .map((view) => view.path)
+      .filter((path) => path !== null);
     expect(new Set(paths).size).toBe(paths.length);
   });
 
@@ -812,13 +1110,14 @@ describe.skipIf(!enabled)("鉴权与授权（真实 pg）", () => {
       }),
     );
     // 直接用 SQL 绑到内置的「观察者」角色：这时还没有 token，走不了 HTTP。
-    const builtIn = await pool.query("SELECT id FROM sys_role WHERE name = $1 AND deleted_at IS NULL", [
-      ROLE_VIEWER,
-    ]);
-    await pool.query("INSERT INTO sys_role_user_mapping (role_id, user_id) VALUES ($1, $2)", [
-      builtIn.rows[0].id,
-      viewer.id,
-    ]);
+    const builtIn = await pool.query(
+      "SELECT id FROM sys_role WHERE name = $1 AND deleted_at IS NULL",
+      [ROLE_VIEWER],
+    );
+    await pool.query(
+      "INSERT INTO sys_role_user_mapping (role_id, user_id) VALUES ($1, $2)",
+      [builtIn.rows[0].id, viewer.id],
+    );
 
     const token = await login(VIEWER_EMAIL, VIEWER_PWD);
     const auth = asBearer(token);
@@ -832,21 +1131,352 @@ describe.skipIf(!enabled)("鉴权与授权（真实 pg）", () => {
     expect((await call("/rbac/users", auth)).status).toBe(403);
 
     // 写图书业务：403 —— 手里只有 read，没有 create / update / delete。
-    expect((await authSend(token, "/book/authors", "POST", { name: "IT-不该建成" })).status).toBe(403);
-    expect((await authSend(token, "/book/stores", "POST", { name: "IT-不该建成" })).status).toBe(403);
+    expect(
+      (await authSend(token, "/book/authors", "POST", { name: "IT-不该建成" }))
+        .status,
+    ).toBe(403);
+    expect(
+      (await authSend(token, "/book/stores", "POST", { name: "IT-不该建成" }))
+        .status,
+    ).toBe(403);
 
     // 被拦住之后，库里不该多出任何东西 —— 403 必须发生在写入之前。
-    const leaked = await pool.query("SELECT count(*)::int n FROM author WHERE name LIKE 'IT-不该建成%'");
+    const leaked = await pool.query(
+      "SELECT count(*)::int n FROM author WHERE name LIKE 'IT-不该建成%'",
+    );
     expect(leaked.rows[0].n).toBe(0);
 
     // 观察者的可达集合只剩图书管理那一组。
-    const access = await json<{ views: Array<{ name: string }>; permissions: string[] }>(
-      await call("/auth/me/access", auth),
-    );
-    expect(access.permissions).toEqual(["book.author.read", "book.book.read", "book.store.read"]);
+    const access = await json<{
+      views: Array<{ name: string }>;
+      permissions: string[];
+    }>(await call("/auth/me/access", auth));
+    expect(access.permissions).toEqual([
+      "book.author.read",
+      "book.book.read",
+      "book.store.read",
+    ]);
     expect(access.views.map((view) => view.name).sort()).toEqual(
       ["图书管理", "图书", "作者", "书店"].sort(),
     );
+  });
+});
+
+describe.skipIf(!enabled)("我的资料与管理员权限升级（真实 pg）", () => {
+  it("自己的资料来自数据库，组织软删除可为空，响应不含凭据", async () => {
+    const response = await call("/auth/me");
+    expect(response.status).toBe(200);
+    const profile = await json<{ id: string; name: string; email: string; organization: { id: string } | null; roles: { name: string }[] }>(response);
+    expect(profile.email).toBe(process.env.ADMIN_EMAIL ?? "admin@example.com");
+    expect(profile.roles.map((r) => r.name)).toContain("管理员");
+    expect(Object.keys(profile).sort()).toEqual(["email", "id", "mustChangePassword", "name", "organization", "roles"]);
+    const user = await pool.query("SELECT id, organization_id, name FROM sys_user WHERE id=$1", [profile.id]);
+    const orgId = user.rows[0].organization_id;
+    const priorOrg = (await pool.query("SELECT deleted_at FROM sys_organization WHERE id=$1", [orgId])).rows[0];
+    try {
+      await pool.query("UPDATE sys_user SET name='IT-资料更新' WHERE id=$1", [profile.id]);
+      await pool.query("UPDATE sys_organization SET deleted_at=now() WHERE id=$1", [orgId]);
+      const changed = await json<{ name: string; organization: unknown }>(await call("/auth/me?userId=999"));
+      expect(changed.name).toBe("IT-资料更新");
+      expect(changed.organization).toBeNull();
+    } finally {
+      await pool.query("UPDATE sys_user SET name=$2 WHERE id=$1", [profile.id, user.rows[0].name]);
+      await pool.query("UPDATE sys_organization SET deleted_at=$2 WHERE id=$1", [orgId, priorOrg.deleted_at]);
+    }
+    expect((await app.handle(new Request("http://localhost/auth/me"))).status).toBe(401);
+  });
+  it("管理员撤销权限后，seed 不恢复授权", async () => {
+    const role = (await pool.query("SELECT id FROM sys_role WHERE name='管理员' AND deleted_at IS NULL ORDER BY id LIMIT 1")).rows[0];
+    const permission = (await pool.query("SELECT id FROM sys_permission WHERE code='rbac.user.resetPassword' AND deleted_at IS NULL ORDER BY id LIMIT 1")).rows[0];
+    try {
+      await pool.query("DELETE FROM sys_role_permission_mapping WHERE role_id=$1 AND permission_id=$2", [role.id, permission.id]);
+      const links = () => pool.query("SELECT * FROM sys_role_permission_mapping WHERE role_id=$1 AND permission_id=$2", [role.id, permission.id]);
+      await seedSystemData();
+      expect((await links()).rows).toHaveLength(0);
+    } finally { await pool.query("INSERT INTO sys_role_permission_mapping (role_id,permission_id) VALUES ($1,$2) ON CONFLICT DO NOTHING", [role.id,permission.id]); }
+  });
+});
+
+describe.skipIf(!enabled)("密码生命周期（真实 pg）", () => {
+  afterAll(async () => {
+    await pool.query(
+      "DELETE FROM sys_role_user_mapping WHERE role_id IN (SELECT id FROM sys_role WHERE name = $1)",
+      [`IT-password-role-${STAMP}`],
+    );
+    await pool.query(
+      "DELETE FROM sys_role_permission_mapping WHERE role_id IN (SELECT id FROM sys_role WHERE name = $1)",
+      [`IT-password-role-${STAMP}`],
+    );
+    await pool.query("DELETE FROM sys_role WHERE name = $1", [
+      `IT-password-role-${STAMP}`,
+    ]);
+    await pool.query("DELETE FROM sys_user WHERE email = $1", [
+      `it-password-${STAMP}@example.com`,
+    ]);
+  });
+  it("用户自行改密、管理员重置、强制改密及旧 JWT 撤销", async () => {
+    const org = (
+      await pool.query(
+        "SELECT id FROM sys_organization WHERE deleted_at IS NULL LIMIT 1",
+      )
+    ).rows[0];
+    const email = `it-password-${STAMP}@example.com`;
+    const created = await send("/rbac/users", "POST", {
+      name: "IT-密码测试",
+      email,
+      password: "original-password",
+      organizationId: String(org.id),
+    });
+    const userId = (await json<{ id: string }>(created)).id;
+    const login = async (password: string) => {
+      const response = await send("/auth/login", "POST", { email, password });
+      expect(response.status).toBe(200);
+      return response.json() as Promise<{
+        token: string;
+        mustChangePassword: boolean;
+      }>;
+    };
+    const withToken = (token: string, path: string, body?: unknown) =>
+      call(path, {
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        ...(body === undefined
+          ? {}
+          : { method: "POST", body: JSON.stringify(body) }),
+      });
+    const grants = await pool.query(
+      "SELECT id FROM sys_permission WHERE code IN ('rbac.user.create', 'rbac.user.update', 'book.book.read') AND deleted_at IS NULL",
+    );
+    const role = await send("/rbac/roles", "POST", {
+      name: `IT-password-role-${STAMP}`,
+      userIds: [userId],
+      permissionIds: grants.rows.map((p) => String(p.id)),
+    });
+    expect(role.status).toBe(201);
+    const first = await login("original-password");
+    const own = await withToken(first.token, "/auth/me");
+    expect(own.status).toBe(200);
+    expect(await own.json()).toMatchObject({ id: userId, email });
+    const second = await login("original-password");
+    expect(
+      (
+        await withToken(first.token, `/rbac/users/${userId}/password`, {
+          newPassword: "unauthorized-reset",
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await withToken(first.token, `/rbac/users/${userId}/password/`, {
+          newPassword: "unauthorized-reset",
+        })
+      ).status,
+    ).toBe(403);
+    const encodedId = `%${userId.charCodeAt(0).toString(16)}${userId.slice(1)}`;
+    expect(
+      (
+        await withToken(first.token, `/rbac/users/${encodedId}/password`, {
+          newPassword: "unauthorized-reset",
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await withToken(first.token, "/auth/me/password", {
+          currentPassword: "wrong-password",
+          newPassword: "new-password",
+        })
+      ).status,
+    ).toBe(422);
+    expect((await withToken(first.token, "/auth/me/access")).status).toBe(200);
+    expect(
+      (
+        await withToken(first.token, "/auth/me/password", {
+          currentPassword: "original-password",
+          newPassword: "original-password",
+        })
+      ).status,
+    ).toBe(422);
+    expect(
+      (
+        await withToken(first.token, "/auth/me/password", {
+          currentPassword: "original-password",
+          newPassword: "new-password",
+        })
+      ).status,
+    ).toBe(200);
+    for (const token of [first.token, second.token])
+      expect((await withToken(token, "/auth/me/access")).status).toBe(401);
+    expect(
+      (
+        await send("/auth/login", "POST", {
+          email,
+          password: "original-password",
+        })
+      ).status,
+    ).toBe(401);
+    const next = await login("new-password");
+    expect(next.mustChangePassword).toBe(false);
+    expect(
+      (
+        await send(`/rbac/users/${userId}/password`, "POST", {
+          newPassword: "temporary-password",
+        })
+      ).status,
+    ).toBe(200);
+    expect((await withToken(next.token, "/auth/me/access")).status).toBe(401);
+    const temporary = await login("temporary-password");
+    expect((await withToken(temporary.token, "/auth/me/access")).status).toBe(
+      200,
+    );
+    expect(temporary.mustChangePassword).toBe(true);
+    const blocked = await withToken(temporary.token, "/book/books");
+    expect(blocked.status).toBe(403);
+    expect(await blocked.json()).toMatchObject({
+      code: "PASSWORD_CHANGE_REQUIRED",
+    });
+    expect(
+      (
+        await withToken(temporary.token, "/auth/me/password", {
+          currentPassword: "temporary-password",
+          newPassword: "final-password",
+        })
+      ).status,
+    ).toBe(200);
+    expect((await withToken(temporary.token, "/auth/me/access")).status).toBe(
+      401,
+    );
+    const final = await login("final-password");
+    expect(final.mustChangePassword).toBe(false);
+    expect((await withToken(final.token, "/book/books")).status).toBe(200);
+    await seedSystemData();
+    await login("final-password");
+    expect(
+      (
+        await send(`/rbac/users/${userId}/password`, "POST", {
+          newPassword: "short",
+        })
+      ).status,
+    ).toBe(422);
+    expect(
+      (
+        await send("/rbac/users/999999999/password", "POST", {
+          newPassword: "temporary-password",
+        })
+      ).status,
+    ).toBe(404);
+    await send(`/rbac/users/${userId}`, "DELETE", undefined);
+    expect((await withToken(final.token, "/auth/me/access")).status).toBe(401);
+  });
+});
+
+describe.skipIf(!enabled)("权限自动托管插件（真实 pg）", () => {
+  it("自动启动同步、变更定位、废弃、冲突回滚和授权即时生效", async () => {
+    type Route = { path: string; method: "GET" | "POST"; permission?: string | false };
+    const prefix = `/IT-plugin-${STAMP}`;
+    const stableCode = `IT-plugin-stable-${STAMP}`;
+    const initial: Route[] = [
+      { method: "GET", path: `${prefix}/stable`, permission: stableCode },
+      { method: "GET", path: `${prefix}/items/:id` },
+      { method: "GET", path: `${prefix}/method` },
+      { method: "POST", path: `${prefix}/method` },
+      { method: "GET", path: `${prefix}/profile`, permission: false },
+    ];
+    const build = (definitions: Route[]) => {
+      const routes = new Elysia({ name: "IT-permission-endpoints" }).use(permissionOptions);
+      for (const definition of definitions) {
+        routes.route(definition.method, definition.path, () => ({ ok: true }),
+          definition.permission === undefined ? {} : { permission: definition.permission });
+      }
+      return createApp().use(routes);
+    };
+    const rows = () => pool.query("SELECT id, code, url, method, deprecated, deleted_at FROM sys_permission WHERE url LIKE $1 OR code LIKE $2 ORDER BY id", [`${prefix}%`, `IT-plugin-%-${STAMP}`]);
+    const idFor = async (code: string) => String((await pool.query("SELECT id FROM sys_permission WHERE code=$1", [code])).rows[0].id);
+    const invoke = (target: ReturnType<typeof build>, path: string, token = adminToken) => target.handle(new Request(`http://localhost${path}`, { headers: token ? { authorization: `Bearer ${token}` } : {} }));
+    const roleId = (await pool.query("SELECT id FROM sys_role WHERE name=$1 AND deleted_at IS NULL", [ROLE_ADMIN])).rows[0].id;
+    const grant = (id: string) => pool.query("INSERT INTO sys_role_permission_mapping(role_id,permission_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [roleId, id]);
+    const boot = build(initial);
+    try {
+      // 使用实际 Elysia onStart，而不是只调用同步函数。
+      boot.listen({ hostname: "127.0.0.1", port: 0 });
+      await boot.decorator.permissionCatalog.ready();
+      expect((await rows()).rows).toHaveLength(4);
+      expect((await pool.query("SELECT * FROM sys_permission WHERE url=$1", [`${prefix}/profile`])).rows).toHaveLength(0);
+      const stableId = await idFor(stableCode);
+      const generatedCode = `GET:${prefix}/items/:id`;
+      const generatedId = await idFor(generatedCode);
+      expect((await invoke(boot, `${prefix}/stable`)).status).toBe(403);
+      await grant(stableId);
+      await grant(generatedId);
+      expect((await invoke(boot, `${prefix}/stable`)).status).toBe(200);
+      expect((await invoke(boot, `${prefix}/items/123`)).status).toBe(200);
+      expect((await invoke(boot, `${prefix}/profile`, "")).status).toBe(401);
+      expect((await invoke(boot, `${prefix}/profile`)).status).toBe(200);
+      const admin = (await pool.query("SELECT id, must_change_password FROM sys_user WHERE initial_admin=true")).rows[0];
+      try {
+        await pool.query("UPDATE sys_user SET must_change_password=true WHERE id=$1", [admin.id]);
+        expect((await invoke(boot, `${prefix}/profile`)).status).toBe(403);
+      } finally {
+        await pool.query("UPDATE sys_user SET must_change_password=$2 WHERE id=$1", [admin.id, admin.must_change_password]);
+      }
+      const before = (await rows()).rows;
+      await Promise.all([
+        boot.decorator.permissionCatalog.synchronize(boot.routes),
+        boot.decorator.permissionCatalog.synchronize(boot.routes),
+      ]);
+      expect((await rows()).rows).toEqual(before);
+      // 固定 code 改路由：保留 ID 与授予关系。
+      const movedRoutes = initial.map((route) => route.permission === stableCode ? { ...route, path: `${prefix}/renamed` } : route);
+      const moved = build(movedRoutes);
+      await moved.decorator.permissionCatalog.start(moved.routes);
+      expect(await idFor(stableCode)).toBe(stableId);
+      expect((await invoke(moved, `${prefix}/renamed`)).status).toBe(200);
+      // 固定接口改 code：通过 url + method 定位到同一行。
+      const renamedCode = `IT-plugin-renamed-${STAMP}`;
+      const renamedRoutes = movedRoutes.map((route) => route.permission === stableCode ? { ...route, permission: renamedCode } : route);
+      const renamed = build(renamedRoutes);
+      await renamed.decorator.permissionCatalog.start(renamed.routes);
+      expect(await idFor(renamedCode)).toBe(stableId);
+      expect((await invoke(renamed, `${prefix}/renamed`)).status).toBe(200);
+      // 在改路由时显式固定原自动 code，可以沿用原记录和授权。
+      const pinned = build(renamedRoutes.map((route) => route.path === `${prefix}/items/:id` ? { ...route, path: `${prefix}/pinned-items/:id`, permission: generatedCode } : route));
+      await pinned.decorator.permissionCatalog.start(pinned.routes);
+      expect(await idFor(generatedCode)).toBe(generatedId);
+      expect((await invoke(pinned, `${prefix}/pinned-items/123`)).status).toBe(200);
+      // 自动 code 随路由一起变更：创建新记录，旧记录废弃，保留旧角色关系。
+      const changedRoutes = renamedRoutes.map((route) => route.path === `${prefix}/items/:id` ? { ...route, path: `${prefix}/entries/:id` } : route);
+      const changed = build(changedRoutes);
+      await changed.decorator.permissionCatalog.start(changed.routes);
+      expect(await idFor(`GET:${prefix}/entries/:id`)).not.toBe(generatedId);
+      expect((await pool.query("SELECT deprecated FROM sys_permission WHERE id=$1", [generatedId])).rows[0].deprecated).toBe(true);
+      expect((await pool.query("SELECT * FROM sys_role_permission_mapping WHERE role_id=$1 AND permission_id=$2", [roleId, generatedId])).rows).toHaveLength(1);
+      expect((await invoke(changed, `${prefix}/entries/123`)).status).toBe(403);
+      // 删路由不删记录；重新出现则恢复有效状态，沿用原授权。
+      const removed = build(changedRoutes.filter((route) => route.permission !== renamedCode));
+      await removed.decorator.permissionCatalog.start(removed.routes);
+      expect((await pool.query("SELECT deprecated FROM sys_permission WHERE id=$1", [stableId])).rows[0].deprecated).toBe(true);
+      const restored = build(changedRoutes);
+      await restored.decorator.permissionCatalog.start(restored.routes);
+      expect((await invoke(restored, `${prefix}/renamed`)).status).toBe(200);
+      // 管理员删除是持久操作，托管同步不会恢复 deleted_at。
+      await pool.query("UPDATE sys_permission SET deleted_at=now() WHERE id=$1", [stableId]);
+      await restored.decorator.permissionCatalog.synchronize(restored.routes);
+      expect((await invoke(restored, `${prefix}/renamed`)).status).toBe(403);
+      expect((await pool.query("SELECT deleted_at FROM sys_permission WHERE id=$1", [stableId])).rows[0].deleted_at).not.toBeNull();
+      await pool.query("UPDATE sys_permission SET deleted_at=null WHERE id=$1", [stableId]);
+      // 两个唯一键指向不同记录：拒绝猜测，整笔事务回滚。
+      const snapshot = (await rows()).rows;
+      const conflicting = build([{ method: "GET", path: `${prefix}/entries/:id`, permission: renamedCode }]);
+      await expect(conflicting.decorator.permissionCatalog.synchronize(conflicting.routes)).rejects.toThrow("权限定位冲突");
+      expect((await rows()).rows).toEqual(snapshot);
+    } finally {
+      if (boot.server) await boot.stop();
+      await pool.query("DELETE FROM sys_role_permission_mapping WHERE permission_id IN (SELECT id FROM sys_permission WHERE url LIKE $1 OR code LIKE $2)", [`${prefix}%`, `IT-plugin-%-${STAMP}`]);
+      await pool.query("DELETE FROM sys_permission WHERE url LIKE $1 OR code LIKE $2", [`${prefix}%`, `IT-plugin-%-${STAMP}`]);
+      await app.decorator.permissionCatalog.synchronize(app.routes);
+    }
   });
 });
 
@@ -858,5 +1488,5 @@ describe.skipIf(!enabled)("鉴权与授权（真实 pg）", () => {
  * describe，关闭只留在这一处。
  */
 afterAll(async () => {
-  await close();
+  if (enabled) await close();
 });

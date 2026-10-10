@@ -1,0 +1,9 @@
+ts-fullstack-ts-grm
+Copyright 2026 ts-fullstack-ts-grm contributors
+
+The frontend was originally exported from vue-admin-template:
+@see https://gitea.guico.top/guico/vue-admin-template.git
+Commit: 975ae3cfc3808b7d7ea08a41a39fcf0aacd512b2
+
+Apache-2.0 licensing of this repository, including the exported frontend,
+was authorized by the repository owner. Dependencies retain their own licenses.

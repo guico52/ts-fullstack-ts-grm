@@ -121,11 +121,7 @@ export const BOOKS: ResourceSpec = {
   ],
   label: (row) => rowText(row, "name"),
   toForm: (row) => {
-    const store = row.store
-    const storeId =
-      typeof store === "object" && store !== null
-        ? (store as Record<string, unknown>).id
-        : undefined
+    const storeId = row.store?.id
     return {
       name: row.name,
       edition: row.edition,

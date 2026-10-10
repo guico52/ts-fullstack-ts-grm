@@ -12,6 +12,17 @@
 - 迁移工具 **`ts-grm-migrate`**（alpha），命令是 `tgm`。
 - 项目必须是 **ESM**（`"type": "module"`）。
 
+### 类型约束
+
+- 内部数据、数据库投影、插件实例、上下文和回调必须有对应的类型。优先从模型、schema、已定义变量和框架类型推导；推导准确时不要求重复标注，也不另写一份重复的接口定义。
+- 导出需要复用的变量类型，例如 `src/plugins/auth.ts` 的 `AuthGuardType = typeof authGuard`；上下文从 `InferContext<AuthGuardType>` 派生。插件实例与请求校验回调是不同的类型，`PermissionCatalog` 的 `permissionCheck` 使用对应的 `PermissionCheck`，不能用 `unknown` 代替。
+- 请求体类型由 Elysia schema 推导，查询结果由 ts-grm 投影推导；原生 `pg` 查询需要定义对应结果类型。新增字段、钩子或返回值时同步维护类型，不把已知结构写成 `any`、`unknown` 或宽泛的 `Record<string, unknown>`。
+- 非必要情况下禁止使用 `any`、`unknown`。不能为了消除类型错误把 `any` 换成 `unknown`，也不能通过 `as any`、`as never`、`as unknown as T` 或类型检查抑制绕过约束；应修正类型来源、收窄联合类型或完善适配器。
+- `unknown` 仅用于确实无法预知结构的边界，例如未经验证的 JSON、捕获的异常和外部库返回值。使用处须说明边界原因，通过 schema、类型守卫或属性检查完成验证和收窄，再传入内部业务代码；类型断言不能代替验证。
+- `any` 仅在第三方类型缺陷等无法合理消除的限制下允许局部例外，须在使用处说明原因和影响范围，封装后向业务层提供具体类型。
+- 泛型用于保留真实的输入与输出关系，不作为逃避类型建模的替代品。测试故意传入非法数据时，可局部使用附有原因的 `@ts-expect-error`，同时验证静态拒绝与运行时处理；生产代码不得照搬。
+- TypeScript 检查不能证明每处 `unknown` 都必要；上述必要性、验证是否充分及例外范围由 code review 审查。
+
 ## 2. 目录与分层
 
 ```
@@ -28,6 +39,7 @@ src/
 │       ├── repository.ts      读 ts-grm / 写原生 pg
 │       ├── service.ts         业务规则
 │       └── index.ts           Elysia controller
+├── plugins/                   跨领域的自定义 Elysia 插件（与 modules 同级）
 ├── errors.ts                  领域错误 + SQLSTATE 分类
 ├── app.ts                     组装：插件 + 错误处理 + 挂模块
 └── index.ts                   进程入口
@@ -62,7 +74,7 @@ index → service → repository → model/index（client、事务）
 
   | 这一列…                                                                                | 用            |
   | -------------------------------------------------------------------------------------- | ------------- |
-  | 会出现在 WHERE / ORDER BY（名字、编码、路由、权限名…）                                 | `prop.str(n)` |
+  | 会出现在 WHERE / ORDER BY（名字、编码、路由、权限标识…）                               | `prop.str(n)` |
   | 只被读出来、在**应用层**处理（`pwd_hash` 交给 `Bun.password.verify`，`logo` 是个 URL） | `prop.text()` |
 
   保持 `text()` 的列要在模型里**逐列注明理由**——否则下一个人分不清那是设计还是漏改。
@@ -202,9 +214,9 @@ export function rbacModule() {
 
 ## 6. 应用组装与错误处理
 
-### 认证：登录、token，以及还没做的授权
+### 认证与授权
 
-`POST /auth/login` 拿邮箱与口令换 `{ id, name, email, token }`。token 是 JWT
+`POST /auth/login` 拿邮箱与口令换 `{ id, name, email, mustChangePassword, token }`。token 是 JWT
 （`@elysiajs/jwt`，有效期 7 天，密钥来自 `JWT_SECRET`）。
 
 **做了的：**
@@ -214,14 +226,15 @@ export function rbacModule() {
 - 签发在**路由层**：`authService` 不认识 Elysia 上下文，也不该认识。
 - `JWT_SECRET` 在**生产环境缺失时启动就报错** —— 用公开默认值签发凭据，
   等于谁都能伪造 token。开发环境允许缺省，但会打印警告。
-- `modules/auth/guard.ts` 的 `authGuard` 校验 Bearer token，把载荷放进 `ctx.user`。
+- `plugins/auth.ts` 的 `authGuard` 校验 Bearer token 与数据库 tokenVersion，从数据库读取当前身份放进 `ctx.user`。
 
-**没做的（有意）：**
+**业务路由已启用认证与授权：**
 
-- **`authGuard` 没有挂在任何业务路由上。** 挂上去会立刻打断前端——前端还没有把
-  token 放进请求头。启用时在 `app.ts` 里把 `.use(authGuard)` 写在业务模块**之前**。
-- **没有授权。** token 只说明“这是本服务签发的、且没过期”，**不代表这个人现在有
-  权限**。角色与权限点的数据已经有了（见下一节），但没有任何地方读它们。
+- app.ts 在业务模块前挂载 authGuard 与 permissionGuard。匿名请求返回 401，缺少权限返回 403。
+- GET /auth/me/access 返回角色汇总的视图与权限；前端据此创建导航、动态路由和操作按钮。
+- 每个请求重新读取权限，软删除角色或移除授权后无需等 token 到期。
+- 新接口默认从 method + 路由模板生成权限，无需登记前缀或 seed；权限目录由 plugins/permission-catalog.ts 托管。固定 code 与豁免仅配置例外，见[权限说明](../../docs/permissions.md)。
+- JWT 无服务端会话表；修改或重置密码原子递增 tokenVersion，旧 JWT 失效。前端登出仅清除本地凭据。
 
 - `app.ts` 只做：全局插件（CORS）、全局错误处理、**挂载各域的聚合插件**；业务逻辑一行不写。
 - **`onError` 必须注册在 `.use(模块)` 之前**，否则插件路由里的异常会漏成框架默认响应。
@@ -229,6 +242,8 @@ export function rbacModule() {
 
   | 状态 | 含义             | `code`                 |
   | ---- | ---------------- | ---------------------- |
+  | 401  | 凭据缺失或无效   | `UNAUTHORIZED`         |
+  | 403  | 缺少操作权限     | `FORBIDDEN`            |
   | 422  | 参数不合法       | `VALIDATION`           |
   | 404  | 接口或资源不存在 | `NOT_FOUND`            |
   | 409  | 唯一约束冲突     | `CONFLICT`             |
@@ -247,17 +262,15 @@ export function rbacModule() {
 
 每次启动调 `seedSystemData()`，**幂等**：按名字找，缺什么建什么，已有的一律不动。
 
-- **图书管理的视图**：一个菜单 + 三个页面。前端侧栏里一直有它们（`src/lib/nav.ts`
-  里写死的），数据库里却从来没有 —— 角色绑的是视图 id，视图不存在就绑不了，
-  “观察者只能看图书业务”也就无从表达。
-- **权限点**：命名是 `<scope>.<资源>.<动作>`，8 个资源 × 4 个动作 = 32 个。
+- **默认视图**：总览、系统管理菜单和五个页面、图书管理菜单和三个页面，共 11 个。创建角色之前先创建全部视图。
+- **权限点**：插件从实际路由生成；示例保留 `<scope>.<资源>.<动作>` 的 33 个固定 code，新接口默认使用 `METHOD:/route`。seed 只读取目录配置角色。
 - **两个内置角色**：
   - **管理员** —— 全部视图 + 全部权限。
   - **观察者** —— 图书管理下的 4 个视图 + `book.*.read` 三个权限。
 
   “不可访问系统管理页面”由**绑定的视图里没有它**决定；“不能删除和修改”由
   **权限集合里只有 read** 决定。两者都是数据的**形状**，而不是一句说明 ——
-  这也意味着它们目前只是**声明**：没有任何地方在读这些绑定（见第 6 节）。
+  服务端每次请求验证权限，前端根据可达集合配置路由与操作按钮。
 
 **内置角色只在缺失时创建，不覆盖已有绑定。** 管理员“拥有全部”是**初始化那一刻**的
 全部：之后新加一个页面，它不会自动进管理员角色。角色绑定向来可以被人编辑，
@@ -265,20 +278,19 @@ export function rbacModule() {
 
 ### 启动时初始化管理员
 
-`src/index.ts` 在**监听之后**调 `ensureAdminUser()`（`modules/rbac/user/bootstrap.ts`）：
-若不存在 `name = "admin"` 的账号，就用 `ADMIN_EMAIL` / `ADMIN_PWD` 建一个。
+`src/index.ts` 先同步完整权限目录，再调用 `seedSystemData()` 创建默认视图与角色，并调用 `ensureAdminUser()`，完成后才监听。
 
-- **幂等，而且不覆盖。** 存在就什么都不做 —— 改过的密码不会在下次重启被悄悄
-  重置回 `.env` 里的值。重置密码应该是显式动作，不是重启的副作用。
-- **判据是名字不是邮箱。** 名字是“初始化过没有”的标记；代价是把 admin 改名
-  之后会再建一个，这是有意的（想重跑就改名）。
-- **失败不阻止启动。** 包在 try/catch 里，库没起时服务照常运行、由 `/health/db`
-  如实报告。初始化是便利，不是启动的前置条件——这也是它放在监听之后的原因。
-- **日志不打印口令。** 启动日志常常被收集和转发，只报名字与邮箱。
-- 用户必须属于一个组织（列 NOT NULL）。取第一个组织；一个都没有时建一个
-  “默认组织”，让全新库也能直接启动。
-- 函数接受可注入的 `{ name, email, password }`，集成测试传自己的名字，
-  不去碰真实的 admin。
+- 首次创建使用 `ADMIN_EMAIL` / `ADMIN_PWD`，组织不存在时自动创建默认组织；生产密码由部署环境提供。
+- `initial_admin` 是持久标记，包含软删除记录。改名、撤权和软删除不会触发重建，也不会恢复角色绑定。
+- 创建账号与首次角色绑定在同一事务中；事务 advisory lock 和部分唯一索引防止并发重复初始化。
+- 迁移将现有 name=admin 的第一条记录标记为初始管理员，不改变密码、删除状态或角色绑定。
+- 未配置管理员凭据则跳过管理员创建；目录同步或初始化失败阻止监听，不提供半初始化服务。
+- 日志不打印密码。参数 `{ email, password }` 只用于注入首次凭据。
+- 一次性升级迁移为仍有 rbac.user.update 的原有「管理员」角色补齐 resetPassword；其他角色需显式授予。后续 seed 不恢复已撤销的权限。
+
+完整密码接口及会话撤销规则见[密码管理](../../docs/passwords.md)。
+
+### 配置与迁移
 
 **没有独立的 config 模块。** 应用侧直接读 `process.env`（Bun 会自动加载 `backend/.env`）。
 
@@ -297,7 +309,7 @@ try {
 
 ```bash
 bun run db:dev -n <名字>   # 生成并应用一个迁移
-bun run db:deploy          # 应用所有待应用迁移（部署/CI）
+bun run db:deploy          # 应用所有待应用迁移（部署）
 bun run db:status          # 已应用 / 待应用
 bun run db:check           # 模型与库是否漂移（有差异退出码 1）
 bun run db:push            # 直接把库同步成模型形状（不写历史，仅本地）
@@ -395,3 +407,9 @@ cd backend && PG_INTEGRATION=1 bun test tests/integration
 PORT=3100 bun run --filter @ts-fullstack-ts-grm/backend start
 curl -i http://localhost:3100/health/db
 ```
+
+### 权限记录
+
+`SysPermission` 仅以 `code` 表示权限，不另设显示名称。`code` 唯一，`url + method` 联合唯一；旧记录的接口字段允许为空。角色授权仍绑定 `id`，列重命名迁移保留原标识和关联。`deprecated` 记录保留在管理列表中，但不参与有效授权。权限目录托管插件位于 `src/plugins/permission-catalog.ts`，同步只新增、更新或标记废弃，删除由管理员显式执行。默认生成规则、定位变更与部署范围见[权限说明](../../docs/permissions.md)。
+
+若将来采用路由派生 code，路由可能变动的接口应在变动前显式固定原 code，避免失去原有授权。

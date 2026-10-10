@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
-import { useRouter } from "vue-router"
+import { useRoute, useRouter } from "vue-router"
 import { Loader2, LogIn } from "@lucide/vue"
 
 import PageHeader from "@/components/layout/PageHeader.vue"
@@ -24,6 +24,7 @@ import { useAuthStore } from "@/stores/auth.ts"
  * 页面时的重建。
  */
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const access = useAccessStore()
 
@@ -60,9 +61,24 @@ async function submit() {
     // 不写死 `/`：用户不一定有总览的权限，跳过去就变成一次 404。
     await access.load()
     registerAccessRoutes(access.views)
-    await router.push(access.landingPath ?? "/")
+    const redirect = route.query.redirect
+    const requested =
+      typeof redirect === "string" &&
+      redirect.startsWith("/") &&
+      !redirect.startsWith("//") &&
+      router.resolve(redirect).name !== "not-found" &&
+      router.resolve(redirect).name !== "login"
+        ? redirect
+        : null
+    await router.push(
+      data.mustChangePassword
+        ? "/account/password"
+        : (requested ?? access.landingPath ?? "/account/profile"),
+    )
   } catch (cause) {
     // 后端对"邮箱不存在"和"口令不对"回同一句话，所以这里直接显示它。
+    auth.signOut()
+    access.reset()
     error.value = describeApiError(cause)
   } finally {
     submitting.value = false
@@ -110,6 +126,16 @@ async function submit() {
               </Field>
             </FieldGroup>
 
+            <p
+              v-if="route.query.passwordChanged"
+              role="status"
+              class="text-sm text-muted-foreground"
+            >
+              密码已修改，请重新登录。
+            </p>
+            <p v-else-if="route.query.expired" role="status" class="text-sm text-muted-foreground">
+              会话已失效，请重新登录。
+            </p>
             <p v-if="error" role="alert" class="text-destructive text-sm">{{ error }}</p>
 
             <Button type="submit" class="w-full" :disabled="submitting">

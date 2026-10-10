@@ -15,15 +15,27 @@ declare module "vue-router" {
 /**
  * Routes are added in two waves.
  *
- * Only the two pages that must exist before anyone signs in are declared here:
- * the login page, and the catch-all. **Everything else is registered after the
- * server answers "what may this user reach"** — so a page nobody granted is not
+ * Login, account profile, password and catch-all routes are declared here.
+ * Business pages are registered after the
+ * server answers "what may this user reach" — so a page nobody granted is not
  * a page that renders a "forbidden" screen, it is a page that does not exist in
  * this router at all. The catch-all turns it into "页面不存在", which is also
  * what an unknown URL gets: a signed-in user cannot tell "not yours" from "not
  * here", because the difference is not theirs to know.
  */
 export const routes: RouteRecordRaw[] = [
+  {
+    path: "/account/profile",
+    name: "profile",
+    component: () => import("@/views/ProfileView.vue"),
+    meta: { title: "我的信息" },
+  },
+  {
+    path: "/account/password",
+    name: "password",
+    component: () => import("@/views/PasswordView.vue"),
+    meta: { title: "修改密码" },
+  },
   {
     path: "/login",
     name: "login",
@@ -57,6 +69,7 @@ export function registerAccessRoutes(views: readonly AccessView[]): number {
 
   let added = 0
   for (const view of views) {
+    if (["/account/profile", "/account/password", "/login"].includes(view.path ?? "")) continue
     if (view.type !== VIEW_TYPE.VIEW || !view.path || !view.componentName) continue
 
     const component = findComponent(view.componentName)

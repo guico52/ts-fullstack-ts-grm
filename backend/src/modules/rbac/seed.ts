@@ -1,14 +1,13 @@
 import { permissionRepository } from "./permission/repository.ts";
 import { roleRepository } from "./role/repository.ts";
-import { BUILT_IN_ADMIN_NAME } from "./user/bootstrap.ts";
-import { userRepository } from "./user/repository.ts";
+import { ensureAdminUser, type AdminSeedOptions } from "./user/bootstrap.ts";
 import { viewRepository } from "./view/repository.ts";
 
 /**
- * 系统的原始数据：图书管理的视图、权限点，以及两个内置角色。
+ * 系统的原始数据：总览、系统管理、图书管理的视图、权限点，以及两个内置角色。
  *
- * **幂等**：按名字找，缺什么建什么，已有的一律不动。所以每次启动都能安全地
- * 调用它——和 `ensureAdminUser` 同一套思路。
+ * **幂等**：视图与角色按名字补齐，权限由插件托管，已有关系不覆盖。每次启动可
+ * 在目录同步完成后调用它——和 `ensureAdminUser` 同一套思路。
  *
  * **内置角色只在缺失时创建，不覆盖已有绑定。** 管理员"拥有全部"是**初始化
  * 那一刻**的全部：之后新加一个页面，它不会自动进管理员角色。这是有意的——
@@ -20,7 +19,7 @@ import { viewRepository } from "./view/repository.ts";
 export const ROLE_ADMIN = "管理员";
 export const ROLE_VIEWER = "观察者";
 
-/** 图书管理这一组视图：一个菜单 + 三个页面。前端侧栏里一直有它们，数据库里没有。 */
+/** 图书管理这一组视图：一个菜单 + 三个页面。与服务端动态导航共同使用。 */
 const LIBRARY_MENU = { name: "图书管理", icon: "Library", sort: 3 } as const;
 
 const LIBRARY_PAGES = [
@@ -50,20 +49,6 @@ const LIBRARY_PAGES = [
   },
 ] as const;
 
-/** 权限点的命名空间：`<scope>.<资源>.<动作>`。 */
-const RESOURCES = [
-  "rbac.organization",
-  "rbac.user",
-  "rbac.view",
-  "rbac.role",
-  "rbac.permission",
-  "book.book",
-  "book.author",
-  "book.store",
-] as const;
-
-const ACTIONS = ["read", "create", "update", "delete"] as const;
-
 /**
  * 观察者能碰的：**只有图书业务，且只有 read**。
  *
@@ -73,40 +58,83 @@ const ACTIONS = ["read", "create", "update", "delete"] as const;
  */
 const VIEWER_RESOURCES = ["book.book", "book.author", "book.store"] as const;
 
-const permissionName = (resource: string, action: string) =>
+const permissionCode = (resource: string, action: string) =>
   `${resource}.${action}`;
 
 /** 视图在库里的标识：类型 + 名字。同名不同层是允许的，所以要带上类型。 */
 const viewKey = (type: string, name: string) => `${type}:${name}`;
 
-export async function seedSystemData(): Promise<void> {
+export async function seedSystemData(
+  adminOptions: AdminSeedOptions = {},
+): Promise<void> {
+  await seedManagementViews();
   const libraryViewIds = await seedLibraryViews();
   const permissionIds = await seedPermissions();
   await seedRoles(libraryViewIds, permissionIds);
-  await bindBuiltInAdmin();
+  await ensureAdminUser(adminOptions);
 }
 
-/* ------------------------------------------------------------ 内置管理员 */
+/** Seed checks every page; the HTTP list limit must not become an initialization limit. */
+async function listAll<T>(
+  list: (
+    limit: number,
+    offset: number,
+  ) => Promise<{ data: T[]; total: number }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += 100) {
+    const page = await list(100, offset);
+    rows.push(...page.data);
+    if (rows.length >= page.total || page.data.length === 0) return rows;
+  }
+}
 
-/**
- * 把内置的 admin 用户放进「管理员」角色 —— **只加他一个**。
- *
- * 没有这一步，seed 出来的角色是空的：角色建好了、权限也齐了，但没人绑上去，
- * 于是管理员登录后什么都访问不了。这很容易被误读成“鉴权坏了”。
- *
- * 用 `addMember` 而不是 `update({ userIds })`：后者的语义是整体替换，会把
- * 角色里已有的成员全部踢掉。这里要的只是“保证这一行存在”。
- *
- * 没配 `ADMIN_EMAIL`（于是没有内置 admin）或者角色被改名时，静默跳过。
- */
-async function bindBuiltInAdmin(): Promise<void> {
-  const admin = await userRepository.findByName(BUILT_IN_ADMIN_NAME);
-  if (!admin) return;
-
-  const role = await roleRepository.findByName(ROLE_ADMIN);
-  if (!role) return;
-
-  await roleRepository.addMember(role.id, admin.id);
+/** 创建管理端的入口；角色创建之前必须具备全部默认页面。 */
+async function seedManagementViews(): Promise<void> {
+  const existing = await listAll(viewRepository.list);
+  async function ensure(body: Parameters<typeof viewRepository.create>[0]) {
+    const found = existing.find(
+      (view) => view.type === body.type && view.name === body.name,
+    );
+    return found?.id ?? (await viewRepository.create(body)).id;
+  }
+  await ensure({
+    name: "总览",
+    icon: "LayoutDashboard",
+    type: "VIEW",
+    path: "/",
+    componentPath: "views/DashboardView.vue",
+    componentName: "DashboardView",
+    sort: 1,
+  });
+  const parentId = await ensure({
+    name: "系统管理",
+    icon: "Shield",
+    type: "MENU",
+    sort: 2,
+  });
+  const pages = [
+    ["组织管理", "Building2", "organizations", "OrganizationsView"],
+    ["用户管理", "Users", "users", "UsersView"],
+    ["视图管理", "LayoutList", "views", "ViewsView"],
+    ["角色管理", "ShieldCheck", "roles", "RolesView"],
+    ["权限管理", "KeyRound", "permissions", "PermissionsView"],
+  ] as const;
+  for (const [
+    index,
+    [name, icon, resource, componentName],
+  ] of pages.entries()) {
+    await ensure({
+      name,
+      icon,
+      type: "VIEW",
+      parentId,
+      sort: index + 1,
+      path: `/system/${resource}`,
+      componentPath: `views/system/${componentName}.vue`,
+      componentName,
+    });
+  }
 }
 
 /* ------------------------------------------------------------------ 视图 */
@@ -114,13 +142,11 @@ async function bindBuiltInAdmin(): Promise<void> {
 /**
  * 建出图书管理的菜单与页面，返回这一组（含菜单）的 id。
  *
- * 这一组视图在前端侧栏里一直存在（`src/lib/nav.ts` 里写死的），但数据库里
- * 从来没有——于是"观察者只能看图书业务"这件事无从表达。角色绑的是视图 id，
- * 视图不存在就绑不了。
+ * 动态路由与导航都来自角色绑定的视图，初始化必须先创建视图再创建角色。
  */
 async function seedLibraryViews(): Promise<string[]> {
   const existing = new Map(
-    (await viewRepository.list(100, 0)).data.map((view) => [
+    (await listAll(viewRepository.list)).map((view) => [
       viewKey(String(view.type), String(view.name)),
       String(view.id),
     ]),
@@ -163,25 +189,9 @@ async function seedLibraryViews(): Promise<string[]> {
 
 /* ---------------------------------------------------------------- 权限点 */
 
-/** 建出所有权限点，返回 `名字 → id`。 */
+/** 权限目录由插件托管；seed 只读取它来初始化角色关系。 */
 async function seedPermissions(): Promise<Map<string, string>> {
-  const existing = new Map(
-    (await permissionRepository.list(100, 0)).data.map((row) => [
-      String(row.name),
-      String(row.id),
-    ]),
-  );
-
-  for (const resource of RESOURCES) {
-    for (const action of ACTIONS) {
-      const name = permissionName(resource, action);
-      if (existing.has(name)) continue;
-      const created = await permissionRepository.create({ name });
-      existing.set(name, created.id);
-    }
-  }
-
-  return existing;
+  return new Map((await listAll(permissionRepository.list)).filter((row) => !row.deprecated).map((row) => [String(row.code), String(row.id)]));
 }
 
 /* ------------------------------------------------------------------ 角色 */
@@ -190,10 +200,10 @@ async function seedRoles(
   libraryViewIds: readonly string[],
   permissions: ReadonlyMap<string, string>,
 ): Promise<void> {
-  const existing = await roleRepository.list(100, 0);
-  const roleNames = new Set(existing.data.map((role) => String(role.name)));
+  const existing = await listAll(roleRepository.list);
+  const roleNames = new Set(existing.map((role) => String(role.name)));
 
-  const allViewIds = (await viewRepository.list(100, 0)).data.map((view) =>
+  const allViewIds = (await listAll(viewRepository.list)).map((view) =>
     String(view.id),
   );
   const allPermissionIds = [...permissions.values()];
@@ -211,11 +221,11 @@ async function seedRoles(
 
   if (!roleNames.has(ROLE_VIEWER)) {
     const viewerPermissionIds = VIEWER_RESOURCES.flatMap((resource) => {
-      const id = permissions.get(permissionName(resource, "read"));
+      const id = permissions.get(permissionCode(resource, "read"));
       // 权限点是本函数刚建出来的，拿不到 id 说明上面出了错，宁可炸掉也不要
       // 建出一个"看起来正常但权限不全"的角色。
       if (!id)
-        throw new Error(`缺少权限点：${permissionName(resource, "read")}`);
+        throw new Error(`缺少权限点：${permissionCode(resource, "read")}`);
       return [id];
     });
 

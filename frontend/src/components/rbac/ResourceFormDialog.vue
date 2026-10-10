@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ResourceFormValues, FormFieldValue } from "@/lib/resource"
 import { computed, ref, watch } from "vue"
 
 import IconPicker from "@/components/rbac/IconPicker.vue"
@@ -42,13 +43,13 @@ import {
  *
  * The reference pickers are native `<select>` on purpose — Reka's Select
  * cannot hold an empty value, and "leave it blank" is a real state here
- * (no parent view, or keep the current password).
+ * (for example, no parent view).
  */
 const props = defineProps<{
   open: boolean
   spec: ResourceSpec
   /** null creates; a row edits. */
-  record: Record<string, unknown> | null
+  record: ResourceRow | null
   /** Candidates for relational fields, keyed by field. */
   options?: Record<string, FieldOption[]>
   /**
@@ -63,8 +64,8 @@ const props = defineProps<{
    * are already decided by where the button was, so the form opens with them
    * filled rather than asking again.
    */
-  seed?: Record<string, unknown> | null
-  save: (body: Record<string, unknown>, id: string | null) => Promise<void>
+  seed?: ResourceFormValues | null
+  save: (body: ResourceFormValues, id: string | null) => Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -72,7 +73,7 @@ const emit = defineEmits<{
   saved: []
 }>()
 
-const values = ref<Record<string, unknown>>({})
+const values = ref<ResourceFormValues>({})
 const errors = ref<Record<string, string>>({})
 const submitError = ref<string | null>(null)
 const submitting = ref(false)
@@ -94,6 +95,7 @@ const groups = computed(() => {
   for (const field of props.spec.fields) {
     // A field the current kind of record has no use for is not shown at all —
     // not shown and disabled, which would leave a dead control on screen.
+    if (mode.value === "update" && field.createOnly) continue
     if (field.visibleWhen && !field.visibleWhen(values.value)) continue
     if (field.legend !== undefined) {
       out.push({ legend: field.legend, fields: [field] })
@@ -120,13 +122,13 @@ const dialogSize = computed<DialogSize>(() => {
 const touched = ref<Set<string>>(new Set())
 
 /** 一个值算不算“已经填了”。空字符串、null、空数组都算没填。 */
-function isFilled(value: unknown): boolean {
+function isFilled(value: FormFieldValue): boolean {
   if (value === "" || value === null || value === undefined) return false
   return !Array.isArray(value) || value.length > 0
 }
 
-function blankValues(spec: ResourceSpec): Record<string, unknown> {
-  const draft: Record<string, unknown> = {}
+function blankValues(spec: ResourceSpec): ResourceFormValues {
+  const draft: ResourceFormValues = {}
   for (const field of spec.fields) {
     if (field.kind === "boolean") draft[field.key] = true
     else if (field.kind === "links") draft[field.key] = []
@@ -142,9 +144,10 @@ watch(
   (open) => {
     if (!open) return
     const editing = props.record !== null
-    values.value = editing
-      ? props.spec.toForm(props.record!)
-      : { ...blankValues(props.spec), ...(props.seed ?? {}) }
+    values.value =
+      props.record !== null
+        ? props.spec.toForm(props.record)
+        : { ...blankValues(props.spec), ...(props.seed ?? {}) }
     errors.value = {}
     submitError.value = null
     submitted.value = false
@@ -221,7 +224,7 @@ function selectedIds(field: ResourceField): string[] {
  * becomes the route. One click instead of three typed strings that can
  * disagree with each other.
  */
-function setField(field: ResourceField, value: unknown): void {
+function setField(field: ResourceField, value: FormFieldValue): void {
   // Typing into a field takes it out of automatic control.
   touched.value.add(field.key)
   values.value[field.key] = value
@@ -288,10 +291,21 @@ async function submit(): Promise<void> {
                 <FieldLabel :for="`field-${field.key}`">{{ field.label }}</FieldLabel>
 
                 <Input
-                  v-if="field.kind === 'text' || field.kind === 'email' || field.kind === 'number'"
+                  v-if="
+                    field.kind === 'text' ||
+                    field.kind === 'password' ||
+                    field.kind === 'email' ||
+                    field.kind === 'number'
+                  "
                   :id="`field-${field.key}`"
                   :type="
-                    field.kind === 'number' ? 'number' : field.kind === 'email' ? 'email' : 'text'
+                    field.kind === 'number'
+                      ? 'number'
+                      : field.kind === 'password'
+                        ? 'password'
+                        : field.kind === 'email'
+                          ? 'email'
+                          : 'text'
                   "
                   :model-value="String(values[field.key] ?? '')"
                   :placeholder="field.placeholder"

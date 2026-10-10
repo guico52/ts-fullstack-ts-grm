@@ -40,11 +40,12 @@ export const UserModel = {
     {
       name: t.Optional(name),
       email: t.Optional(email),
-      password: t.Optional(password),
       organizationId: t.Optional(id),
     },
     { minProperties: 1, additionalProperties: false },
   ),
+  resetPasswordBody: t.Object({ newPassword: password }, { additionalProperties: false }),
+  passwordResult: t.Object({ changed: t.Literal(true) }),
   entity,
   list: t.Object({
     data: t.Array(entity),

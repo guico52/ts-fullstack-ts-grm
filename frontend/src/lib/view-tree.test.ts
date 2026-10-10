@@ -106,8 +106,8 @@ describe("nextSort", () => {
   })
 
   it("tolerates a missing or non-numeric sort", () => {
-    // Rows arrive from the API as unknown values; only the numbers count.
-    const rows = [row("a", null), { id: "b", parentId: null, sort: "3" } as unknown as ViewTreeRow]
+    // @ts-expect-error 模拟错误运行时 sort，同时验证静态契约拒绝字符串。
+    const rows: ViewTreeRow[] = [row("a", null), { id: "b", parentId: null, sort: "3" }]
     expect(nextSort(rows, null)).toBe(4)
   })
 })

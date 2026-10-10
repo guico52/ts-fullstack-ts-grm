@@ -70,6 +70,12 @@ Full text with reasoning and examples: [`docs/principles.md`](./docs/principles.
 
 ## Hard constraints
 
+- **Use concrete types.** Internal data and callbacks must use their corresponding
+  types, preferably inferred from schemas or framework exports. Do not use `any`
+  or `unknown` as shortcuts, or bypass checking with casts or suppressions.
+  Necessary boundary exceptions require a documented reason and validation before
+  entering business code. See [type constraints](./docs/constraints.md#类型约束).
+
 - **Company topbar.** Every page keeps `AppTopbar` with a prominent, centred
   company-name banner. Read the name from `src/config/brand.ts`; use semantic
   tokens for its framing and colour. No English subtitle. Long names wrap

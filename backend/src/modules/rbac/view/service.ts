@@ -29,7 +29,7 @@ const KIND_LABEL: Record<string, string> = {
   BUTTON: "按钮",
 };
 
-const isViewKind = (value: unknown): value is keyof typeof KIND_LABEL =>
+const isViewKind = (value: string): value is keyof typeof KIND_LABEL =>
   value === "MENU" || value === "VIEW" || value === "BUTTON";
 
 /**

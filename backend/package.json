@@ -1,7 +1,7 @@
 {
   "name": "@ts-fullstack-ts-grm/backend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "exports": {
     ".": "./src/app.ts"
@@ -17,7 +17,7 @@
     "db:status": "tgm status",
     "db:push": "tgm push",
     "db:check": "tgm check",
-    "test:integration": "bun test tests/integration"
+    "test:integration": "PG_INTEGRATION=1 bun test tests/integration"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.2",
@@ -34,5 +34,6 @@
     "@types/pg": "8.20.0",
     "ts-grm-migrate": "0.1.0-alpha.4",
     "typescript": "^6.0.2"
-  }
+  },
+  "license": "Apache-2.0"
 }

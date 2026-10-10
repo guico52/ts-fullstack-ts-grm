@@ -15,6 +15,9 @@ export class InvalidHierarchyError extends Error {}
  */
 export class InvalidCredentialsError extends Error {}
 
+/** 当前口令错误属于表单错误，不应触发会话过期处理。 */
+export class InvalidPasswordError extends Error {}
+
 export class DatabaseUnavailableError extends Error {}
 export class DatabaseAuthError extends Error {}
 export class DatabaseConflictError extends Error {}
@@ -26,9 +29,9 @@ export class DatabaseReferenceError extends Error {}
  *
  * 参考：https://www.postgresql.org/docs/current/errcodes-appendix.html
  */
-export function classifyDatabaseError(error: unknown): unknown {
+export function classifyDatabaseError<T>(error: T): T | DatabaseUnavailableError | DatabaseAuthError | DatabaseConflictError | DatabaseReferenceError {
   if (typeof error !== "object" || error === null) return error;
-  const { code } = error as { code?: unknown };
+  const code = "code" in error ? error.code : undefined;
   const options = { cause: error };
   if (code === "28P01" || code === "28000") {
     return new DatabaseAuthError("数据库凭据无效", options);

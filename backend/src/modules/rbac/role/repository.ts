@@ -32,7 +32,10 @@ async function findOne(sql: SqlClient, id: string) {
  */
 async function replaceLinks(
   session: PoolClient,
-  table: "sys_role_user_mapping" | "sys_role_view_mapping" | "sys_role_permission_mapping",
+  table:
+    | "sys_role_user_mapping"
+    | "sys_role_view_mapping"
+    | "sys_role_permission_mapping",
   column: "user_id" | "view_id" | "permission_id",
   roleId: string,
   ids: readonly string[],
@@ -73,13 +76,31 @@ export const roleRepository = {
       );
       const id = String(inserted.rows[0].id);
       if (body.userIds?.length) {
-        await replaceLinks(session, "sys_role_user_mapping", "user_id", id, body.userIds);
+        await replaceLinks(
+          session,
+          "sys_role_user_mapping",
+          "user_id",
+          id,
+          body.userIds,
+        );
       }
       if (body.viewIds?.length) {
-        await replaceLinks(session, "sys_role_view_mapping", "view_id", id, body.viewIds);
+        await replaceLinks(
+          session,
+          "sys_role_view_mapping",
+          "view_id",
+          id,
+          body.viewIds,
+        );
       }
       if (body.permissionIds?.length) {
-        await replaceLinks(session, "sys_role_permission_mapping", "permission_id", id, body.permissionIds);
+        await replaceLinks(
+          session,
+          "sys_role_permission_mapping",
+          "permission_id",
+          id,
+          body.permissionIds,
+        );
       }
       const created = await findOne(clientFor(session), id);
       if (!created) throw new Error("创建后读取角色失败");
@@ -100,28 +121,33 @@ export const roleRepository = {
       if (updated.rowCount === 0) return null;
       // 提供了就整体替换，未提供则保留原有关联。
       if (body.userIds !== undefined) {
-        await replaceLinks(session, "sys_role_user_mapping", "user_id", id, body.userIds);
+        await replaceLinks(
+          session,
+          "sys_role_user_mapping",
+          "user_id",
+          id,
+          body.userIds,
+        );
       }
       if (body.viewIds !== undefined) {
-        await replaceLinks(session, "sys_role_view_mapping", "view_id", id, body.viewIds);
+        await replaceLinks(
+          session,
+          "sys_role_view_mapping",
+          "view_id",
+          id,
+          body.viewIds,
+        );
       }
       if (body.permissionIds !== undefined) {
-        await replaceLinks(session, "sys_role_permission_mapping", "permission_id", id, body.permissionIds);
+        await replaceLinks(
+          session,
+          "sys_role_permission_mapping",
+          "permission_id",
+          id,
+          body.permissionIds,
+        );
       }
       return findOne(clientFor(session), id);
-    });
-  },
-
-  /** 按名字找一行。初始化用它判断角色是否已存在。 */
-  findByName(name: string) {
-    return run(async () => {
-      const [row] = await client
-        .createQuery(SysRole, (q, role) => {
-          q.where(role.name.eq(name));
-          return q.select(role.fetch(RoleView));
-        })
-        .fetchList();
-      return row ?? null;
     });
   },
 
@@ -133,26 +159,6 @@ export const roleRepository = {
         [id],
       );
       return result.rowCount !== 0;
-    });
-  },
-
-  /**
-   * 把一个用户加进角色，**只加他一个**。
-   *
-   * 不能用 `update({ userIds })` 代替：那个语义是「整体替换」，会把角色里
-   * 已有的其他成员全部踢掉。初始化要把内置 admin 放进管理员角色，那种时候
-   * 一个“只保证这一行存在”的动作才是对的。
-   *
-   * 幂等：已经在了就不动（`ON CONFLICT DO NOTHING`）。
-   */
-  addMember(roleId: string, userId: string) {
-    return transaction(async (session) => {
-      await session.query(
-        `INSERT INTO sys_role_user_mapping (role_id, user_id)
-              VALUES ($1, $2)
-         ON CONFLICT DO NOTHING`,
-        [roleId, userId],
-      );
     });
   },
 };

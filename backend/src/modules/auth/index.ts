@@ -1,46 +1,63 @@
 import { Elysia } from "elysia";
-import { jwt } from "@elysiajs/jwt";
+import { jwtPlugin } from "../../plugins/jwt.ts";
 
 import { accessRepository } from "./access.ts";
-import { authGuard } from "./guard.ts";
+import { authGuard } from "../../plugins/auth.ts";
 import { AuthModel } from "./model.ts";
-import { JWT_EXPIRES_IN, resolveJwtSecret } from "./secret.ts";
 import { authService } from "./service.ts";
 
-/** JWT 插件。签发与校验共用同一份密钥配置，所以只有这一处构造它。 */
-export function jwtPlugin() {
-  return jwt({ name: "jwt", secret: resolveJwtSecret(), exp: JWT_EXPIRES_IN });
-}
-
-/**
- * 登录。
- *
- * 这个域只有一实体，所以不再套一层 `auth/<实体>/` —— 域聚合层是为“一个域
- * 有多个 controller”准备的，这里只有一个。
- *
- * 前缀直接是 `/auth`，路由是 `POST /auth/login`。**没有登出接口**：token 是
- * 自证的，服务端没有会话可清，登出就是前端把本地那份丢掉。
- */
+/** 登录、自助改密与当前用户访问集合。 */
 export function authModule() {
-  return new Elysia({ name: "auth", prefix: "/auth" })
-    .use(jwtPlugin())
-    .post("/login", async ({ body, jwt }) => {
-      const user = await authService.login(body);
+  return (
+    new Elysia({ name: "auth", prefix: "/auth" })
+      .use(jwtPlugin())
+      .post(
+        "/login",
+        async ({ body, jwt }) => {
+          const user = await authService.login(body);
 
-      // 签发放在**路由层**：authService 不认识 Elysia 上下文，也不该认识。
-      const token = await jwt.sign({ sub: user.id, name: user.name, email: user.email });
-
-      return { ...user, token };
-    }, {
-      body: AuthModel.loginBody,
-      response: { 200: AuthModel.loginResult },
-      detail: { summary: "用邮箱与口令换用户信息与 token", tags: ["auth"] },
-    })
-    // authGuard 挂在 login **之后**：它只对之后加入的路由生效，所以登录本身
-    // 不需要凭据（否则谁也无法登录）。
-    .use(authGuard)
-    .get("/me/access", ({ user }) => accessRepository.forUser(user.id), {
-      response: { 200: AuthModel.access },
-      detail: { summary: "当前用户可访问的视图与权限点", tags: ["auth"] },
-    });
+          // 签发放在**路由层**：authService 不认识 Elysia 上下文，也不该认识。
+          const { tokenVersion, ...session } = user;
+          const token = await jwt.sign({
+            sub: user.id,
+            name: user.name,
+            email: user.email,
+            tokenVersion,
+          });
+          return { ...session, token };
+        },
+        {
+          body: AuthModel.loginBody,
+          response: { 200: AuthModel.loginResult },
+          detail: {
+            summary: "用邮箱与口令换用户信息与 token",
+            tags: ["auth"],
+            security: [],
+          },
+        },
+      )
+      // authGuard 挂在 login **之后**：它只对之后加入的路由生效，所以登录本身
+      // 不需要凭据（否则谁也无法登录）。
+      .use(authGuard)
+      .get("/me", ({ user }) => authService.profile(user.id), {
+        response: { 200: AuthModel.profile },
+        detail: { summary: "当前用户资料、所属组织与角色", tags: ["auth"] },
+      })
+      .post(
+        "/me/password",
+        ({ user, body }) => authService.changePassword(user.id, body),
+        {
+          body: AuthModel.changePasswordBody,
+          response: { 200: AuthModel.passwordResult },
+          detail: {
+            summary: "修改自己的密码并使所有旧会话失效",
+            tags: ["auth"],
+          },
+        },
+      )
+      .get("/me/access", ({ user }) => accessRepository.forUser(user.id), {
+        response: { 200: AuthModel.access },
+        detail: { summary: "当前用户可访问的视图与权限点", tags: ["auth"] },
+      })
+  );
 }

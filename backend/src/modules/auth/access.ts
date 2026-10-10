@@ -25,7 +25,7 @@ const UserAccessView = dto.view(SysUser, (c) => [
       view.parentId,
       view.sort,
     ]),
-    role.permissions.with((permission) => [permission.name]),
+    role.permissions.with((permission) => [permission.code, permission.deprecated]),
   ]),
 ]);
 
@@ -81,7 +81,7 @@ export const accessRepository = {
           });
         }
         for (const permission of role.permissions) {
-          permissions.add(String(permission.name));
+          if (!permission.deprecated) permissions.add(String(permission.code));
         }
       }
 

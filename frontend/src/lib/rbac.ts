@@ -3,7 +3,7 @@
  *
  * One table per resource feeds the page heading, the table columns and the
  * form fields, so a field renamed in one place cannot disagree with the
- * other three. Rows arrive from the API as `Record<string, unknown>`; the
+ * other three. Rows preserve backend schema field types; the
  * `value`/`toForm` callbacks are where that gets shaped, and they are pure
  * functions — testable without a DOM, which is why they live here and not
  * in a `.vue`.
@@ -14,9 +14,15 @@
  * in the same language. Re-exported here so `from "@/lib/rbac"` keeps
  * working for the pages and the dialog.
  */
-import type { CellBadge, FieldOption, ResourceSpec } from "./resource"
+import type {
+  CellBadge,
+  FieldOption,
+  ResourceFormValues,
+  ResourceRow,
+  ResourceSpec,
+} from "./resource"
 import { idsOf, nestedLength, nestedName, rowText } from "./resource"
-import { nextSort, type ViewTreeRow } from "./view-tree"
+import { nextSort, hasTreeFields } from "./view-tree"
 import { VIEW_COMPONENTS } from "./views-catalog"
 
 export * from "./resource"
@@ -44,7 +50,7 @@ export const VIEW_TYPES: readonly FieldOption[] = [
 ]
 
 /** The badge a view's kind earns. */
-function typeBadge(row: Record<string, unknown>): CellBadge {
+function typeBadge(row: ResourceRow): CellBadge {
   const type = String(row.type)
   const label = VIEW_TYPES.find((option) => option.value === type)?.label ?? type
   const tone =
@@ -53,7 +59,7 @@ function typeBadge(row: Record<string, unknown>): CellBadge {
 }
 
 /** Route and component only apply to a page; see `visibleWhen` usage below. */
-const isPage = (values: Record<string, unknown>): boolean => values.type === "VIEW"
+const isPage = (values: ResourceFormValues): boolean => values.type === "VIEW"
 
 /**
  * The tree is three levels: a page hangs off a menu (or stands on its own),
@@ -70,7 +76,7 @@ const PARENT_OF: Record<string, string | null> = {
  * A button must belong to a page. A page may stand at the top level, so its
  * parent is optional — only the menu is forbidden a parent.
  */
-const needsParent = (values: Record<string, unknown>): boolean => values.type === "BUTTON"
+const needsParent = (values: ResourceFormValues): boolean => values.type === "BUTTON"
 
 export const ORGANIZATIONS: ResourceSpec = {
   key: "organizations",
@@ -110,9 +116,9 @@ export const USERS: ResourceSpec = {
     {
       key: "password",
       label: "口令",
-      kind: "text",
+      kind: "password",
       required: true,
-      requiredOnUpdate: false,
+      createOnly: true,
     },
     {
       key: "organizationId",
@@ -124,11 +130,7 @@ export const USERS: ResourceSpec = {
   ],
   label: (row) => rowText(row, "email"),
   toForm: (row) => {
-    const organization = row.organization
-    const organizationId =
-      typeof organization === "object" && organization !== null
-        ? (organization as Record<string, unknown>).id
-        : undefined
+    const organizationId = row.organization?.id
     return { name: row.name, email: row.email, password: "", organizationId }
   },
 }
@@ -191,7 +193,7 @@ export const VIEWS: ResourceSpec = {
       // A position among siblings: it follows the parent, which is itself a
       // field. Any sibling level counts on its own.
       auto: (values, rows) =>
-        nextSort(rows as ViewTreeRow[], values.parentId ? String(values.parentId) : null),
+        nextSort(rows.filter(hasTreeFields), values.parentId ? String(values.parentId) : null),
     },
     {
       key: "componentPath",
@@ -313,16 +315,21 @@ export const PERMISSIONS: ResourceSpec = {
   key: "permissions",
   title: "权限",
   singular: "权限",
-  columns: [{ key: "name", label: "名称", value: (row) => rowText(row, "name") }],
+  columns: [
+    { key: "code", label: "权限标识", mono: true, value: (row) => rowText(row, "code") },
+    { key: "method", label: "方法", mono: true, value: (row) => rowText(row, "method") },
+    { key: "url", label: "接口路由", mono: true, value: (row) => rowText(row, "url") },
+    { key: "deprecated", label: "状态", value: (row) => (row.deprecated ? "已废弃" : "有效") },
+  ],
   fields: [
     {
-      key: "name",
-      label: "名称",
+      key: "code",
+      label: "权限标识",
       kind: "text",
       required: true,
       placeholder: "例如：rbac.organization.read",
     },
   ],
-  label: (row) => rowText(row, "name"),
-  toForm: (row) => ({ name: row.name }),
+  label: (row) => rowText(row, "code"),
+  toForm: (row) => ({ code: row.code }),
 }

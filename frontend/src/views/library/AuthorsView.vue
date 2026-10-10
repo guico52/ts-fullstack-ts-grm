@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ResourceFormValues } from "@/lib/resource"
 /**
  * The author list.
  *
@@ -11,7 +12,6 @@
 import ResourceListView from "@/components/data/ResourceListView.vue"
 import { api } from "@/lib/api.ts"
 import { AUTHORS } from "@/lib/books.ts"
-import type { ResourceRow } from "@/lib/resource.ts"
 
 import { saveResource } from "@/lib/resource-api"
 import { useResourceActions } from "@/composables/useResourceActions"
@@ -23,7 +23,7 @@ const spec = AUTHORS
 const list = async ({ limit, offset }: { limit: number; offset: number }) => {
   const { data, error } = await api.book.authors.get({ query: { limit, offset } })
   if (error) throw error
-  return { rows: data.data as ResourceRow[], total: data.total }
+  return { rows: data.data, total: data.total }
 }
 
 const remove = async (id: string) => {
@@ -31,7 +31,7 @@ const remove = async (id: string) => {
   if (error) throw error
 }
 
-const save = (body: Record<string, unknown>, id: string | null) => saveResource("authors", body, id)
+const save = (body: ResourceFormValues, id: string | null) => saveResource("authors", body, id)
 </script>
 
 <template>

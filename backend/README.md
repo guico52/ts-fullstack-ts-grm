@@ -39,10 +39,10 @@ bun run db:check         # 模型与库是否一致
 bun run db:push          # 直接同步库结构（不写历史，仅本地）
 ```
 
-需要真实数据库的集成测试：
+需要迁移后的独立测试数据库及 ADMIN_EMAIL / ADMIN_PWD。测试自动初始化管理员与默认数据，不依赖运行中的服务；会写入及清理测试数据，禁止指向生产库。集成测试：
 
 ```bash
-PG_INTEGRATION=1 bun test tests/integration
+bun run test:integration
 ```
 
 ## 环境变量
@@ -56,9 +56,7 @@ PG_INTEGRATION=1 bun test tests/integration
 - `ENABLE_DOCS`：接口文档开关；不设置时非 production 默认开启
 - `JWT_SECRET`：JWT 签名密钥。**生产环境必须设置**（缺失时启动报错）；
   开发环境可留空，会用内置默认值并打印警告。
-- `ADMIN_EMAIL` / `ADMIN_PWD`：初始管理员。**每次启动**检查有没有 name 为
-  `admin` 的账号，没有就用这两个值创建；**已有则完全不动**，改过的密码不会
-  被重启覆盖。任一项为空时跳过。改掉 admin 的名字会让它在下次启动重跑。
+- `ADMIN_EMAIL` / `ADMIN_PWD`：首次 seed 的管理员凭据。只创建一次；持久标记使改名、软删除或移除角色后不再初始化。后续环境变量变化不覆盖数据库密码。
 
 ## 目录
 
@@ -72,6 +70,7 @@ src/
     embedded.ts              auditFields 等公共嵌入字段
     rbac/index.ts            RBAC 模型
     book/index.ts            图书域模型（三种关联各有示例）
+  plugins/                   自定义 Elysia 插件（HTTP、错误、JWT、登录、权限目录）
   modules/                   每个领域一个目录，域内每个实体一个子目录
     <领域>/index.ts          域聚合：把该域的 controller 合成一个插件
     rbac/organization/       组织
@@ -91,10 +90,11 @@ tests/                     单测；tests/integration/ 需真实库
 
 - `GET /health` —— 服务存活
 - `GET /health/db` —— 业务表可读性探针（不可用时 503）
-- `POST /auth/login` —— 邮箱 + 口令换 `{ id, name, email, token }`。token 是 JWT（7 天）。
+- `POST /auth/login` —— 邮箱 + 口令换 `{ id, name, email, mustChangePassword, token }`。token 是 JWT（7 天）。
   未命中与口令不对回**逐字相同**的 401。
-  **校验中间件（`authGuard`）已就绪但没有挂在任何路由上**，因为前端还没带 token；
-  同样地，**没有授权** —— 角色与权限点有数据，但没人读它们。
+  业务路由使用 `authGuard` 校验 JWT，`permissionGuard` 每次查询角色权限。
+- `GET /auth/me` —— 当前用户资料、所属组织与角色，不含任何凭据。
+- `GET /auth/me/access` —— 返回当前用户可访问视图与权限，供前端动态注册路由。
 - `/rbac/organizations`、`/rbac/users`、`/rbac/views`、`/rbac/roles`、`/rbac/permissions`
 - `/book/books`、`/book/authors`、`/book/stores`
 
@@ -158,3 +158,15 @@ tests/                     单测；tests/integration/ 需真实库
 
 **事务内可读到未提交的写。** `transaction((session) => ...)` 里用 `clientFor(session)`
 取得的 ts-grm 客户端复用同一 pg 会话，`INSERT` 之后能立刻读回完整视图。
+
+## 密码接口
+
+- `POST /auth/me/password`：`{ currentPassword, newPassword }`，所有登录用户可用。
+- `POST /rbac/users/:id/password`：`{ newPassword }`，需要 `rbac.user.resetPassword`，重置后强制改密。
+- `PATCH /rbac/users/:id`：仅更新资料，不接受 password。
+- 每次受保护请求检查数据库的 tokenVersion 与 JWT；改密、重置或软删除后旧 JWT 返回 401。
+- 错误当前密码返回 422 / INVALID_PASSWORD；待改密用户访问业务接口返回 403 / PASSWORD_CHANGE_REQUIRED。
+
+见[密码管理与迁移](../docs/passwords.md)。
+
+权限自动生成、托管同步与路由变更边界见[权限说明](../docs/permissions.md)。

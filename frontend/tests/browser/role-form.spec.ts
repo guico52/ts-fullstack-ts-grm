@@ -46,8 +46,8 @@ const VIEWS = [
 ]
 
 const PERMISSIONS = [
-  { id: "10", name: "读取" },
-  { id: "11", name: "写入" },
+  { id: "10", code: "读取" },
+  { id: "11", code: "写入" },
 ]
 
 const USERS = [{ id: "20", name: "张三", email: "zhangsan@example.com" }]
