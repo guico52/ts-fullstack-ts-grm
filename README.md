@@ -1,99 +1,192 @@
-# ts-fullstack-ts-grm
+# TypeScript 全栈管理系统脚手架
 
-TypeScript 全栈项目模板：Vue 3 管理端 + Elysia / PostgreSQL / ts-grm 后端。
-用 **bun workspace** 组织单仓，前后端通过 **Eden Treaty** 共享类型——
-后端改一处 schema，前端立刻编译报错。
+本项目是一个使用 Bun 工作区组织的全栈示例与开发模板，包含 Vue 3 管理端、Elysia 服务和 PostgreSQL 数据库。适合在已有认证、角色授权、管理页面及关系模型示例的基础上开发业务系统。
 
+前后端通过 Eden Treaty 共享接口类型，数据库模型、接口校验和表单适配各有明确职责。项目提供本地检查与测试命令，不包含持续集成配置。
+
+## 项目特性
+
+- **前后端类型贯通**：请求和响应从后端路由推导，通用表单通过类型明确的适配器连接后端校验模型，减少重复维护接口定义。
+- **完整的管理端示例**：组织、用户、视图、角色和权限管理，以及图书、作者、书店业务；业务示例覆盖多对一、一对多和多对多关系。
+- **角色授权与动态导航**：后端逐次验证身份和操作权限，前端根据角色绑定的视图生成菜单与路由，根据权限集合控制操作入口。
+- **自动托管权限目录**：默认以请求方法和路由模板生成权限标识；仅在需要固定标识或豁免操作权限时配置接口。系统维护权限记录，管理员配置角色与权限关系。
+- **账号与密码管理**：首次初始化管理员，所有登录用户可查看“我的信息”并修改密码；具备独立授权的管理员可以重置密码，重置后要求用户修改临时密码。修改或重置密码使该用户全部旧登录凭据失效。
+- **统一的界面规范**：提供共享列表、表单、分页、视图树和布局组件，支持明暗主题、强调色、小屏布局与键盘交互。
+- **数据库迁移与事务**：使用 ts-grm 定义模型和查询投影，使用参数化 SQL 完成写入，使用 ts-grm-migrate 管理数据库变更；包含软删除及事务示例。
+- **分层验证**：包含类型检查、单元测试、界面规范检查、模拟接口浏览器测试、真实数据库集成测试和全栈浏览器测试。
+
+## 技术栈与目录
+
+| 部分           | 技术                                                                  |
+| -------------- | --------------------------------------------------------------------- |
+| 运行与依赖管理 | Bun 工作区、TypeScript                                                |
+| 前端           | Vue 3、Vite、Pinia、Vue Router、Tailwind CSS v4、shadcn-vue / Reka UI |
+| 后端           | Elysia、Eden Treaty、JWT                                              |
+| 数据库         | PostgreSQL、pg、ts-grm、ts-grm-migrate                                |
+| 测试           | Bun 测试、Vitest、Playwright                                          |
+
+```text
+frontend/             前端应用
+  src/views/          页面
+  src/components/     共享组件与基础控件
+  src/lib/            请求适配、类型、校验与纯逻辑
+  docs/               前端架构、交互规范和开发约束
+backend/              后端服务
+  src/model/          数据库模型与统一数据库入口
+  src/modules/        业务模块，按校验模型、仓储、服务和路由分层
+  src/plugins/        自定义认证、授权、权限目录和基础插件
+  migrations/         数据库迁移历史
+  docs/               后端分层、持久化和开发约束
+docs/                 跨前后端的扩展、权限、密码、测试与部署说明
+scripts/              工作区开发脚本
 ```
-frontend/   前端应用（Vue 3 + TypeScript + Vite + Tailwind v4 + Pinia）
-backend/    后端服务（Bun + Elysia + PostgreSQL + ts-grm）
-docs/       实际项目的文档
-```
-
-架构与 [`ts-fullstack-mongodb`](../ts-fullstack-mongodb) 同源，区别只在持久层：
-
-- 数据库从 MongoDB 换成 **PostgreSQL**（统一 `pg` 驱动 + 连接池）。
-- 查询走 **ts-grm**（`@ts-grm/core` + `@ts-grm/sql`）：模型即 schema，
-  关联投影与分页由 DSL 推导。
-- **写入用原生 pg 的参数化 SQL**，补足 ts-grm `save()` 的 insert / update 不足——
-  `save()` 是整实体 upsert，无法表达「只改传入字段」的 PATCH 与精确的关联替换。
-  分工与理由见 [`backend/docs/constraints.md`](./backend/docs/constraints.md#4-持久层分工)。
-- 数据库**模型集中在 `backend/src/model/`**，由 `model/index.ts` 聚合、并导出 ts-grm 客户端。
-  当前两个领域：`rbac`（组织 / 用户 / 视图 / 角色 / 权限）与 `book`（图书 / 作者 / 书店，
-  刚好把多对一、一对多、多对多各演示一遍）。
-
-## 文档在哪
-
-三处 `docs/` 分工不同，不要混放：
-
-- **`frontend/docs/`** —— 前端的文档与项目约束。设计系统、组件、表单、表格、
-  导航规则，以及前端自己怎么开发、怎么检查。
-- **`backend/docs/`** —— 后端的文档与项目约束。模块分层（model / repository /
-  service / index）、依赖方向、持久层分工、错误响应约定、测试与迁移要求。
-- **`docs/`** —— 实际项目的文档。跨前后端的整体内容：仓库结构、接口契约、
-  数据模型、部署与运维。**这里放的是"这个项目"的事，不是"前端/后端这个模板"的事。**
-
-简单判据：**只跟前端或后端有关，写进那一端的 `docs/`；同时牵涉两端、或只对这个
-具体项目成立，写进根 `docs/`。**
-
-各端 `README.md` 是该端入口，指向该端 `docs/`。
 
 ## 快速开始
 
-需要 [Bun](https://bun.sh/) ≥ 1.2 与一个可连的 **PostgreSQL** 实例。
-没有现成实例时，可以起一个临时库：
+### 1. 准备环境
+
+使用 Bun 1.3.14、Node.js 24.11.0 或以上版本，以及可连接的 PostgreSQL 17。Node.js 用于运行迁移工具。
+
+没有现成数据库时，可通过 Podman 启动一个仅供本地开发的数据库：
 
 ```bash
 podman run -d --rm --name ts-grm-pg \
-  -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_USER=postgres \
-  -e POSTGRES_DB=ts_fullstack_ts_grm -p 5432:5432 postgres:17-alpine
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=local-dev-password \
+  -e POSTGRES_DB=ts_fullstack_ts_grm \
+  -p 127.0.0.1:5432:5432 postgres:17-alpine
+
+# 等待数据库就绪，成功后继续。
+podman exec ts-grm-pg pg_isready -U postgres
 ```
 
-然后：
+以上容器未挂载持久卷，停止后数据会随容器删除。需要保留开发数据时，请配置持久卷或使用已有数据库。
+
+### 2. 安装依赖与配置
+
+在仓库根目录执行：
 
 ```bash
-bun install                                     # 在仓库根安装（workspace 统一锁定依赖）
-
-cp backend/.env.example backend/.env            # 按需修改 PG_* 与 ADMIN_*
-bun run --filter @ts-fullstack-ts-grm/backend db:deploy   # 应用迁移，建表
-
-bun run dev                 # 前后端一起启动，日志分别带 [backend] / [frontend] 前缀
-
-#   后端 http://localhost:3000（接口文档 /docs）、前端 http://localhost:5173
-#   也可单独启动：bun run dev:backend / bun run dev:frontend
+bun install --frozen-lockfile
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
 
-后端连接池是**懒建立**的：进程启动时不会连库，首次访问数据库才连。数据库没起也能
-启动服务、通过 `/health` 探活，由 `/health/db` 如实报告 `503`。
+修改 `backend/.env`，使 `PG_HOST`、`PG_PORT`、`PG_DATABASE`、`PG_USER`、`PG_PASSWORD` 与实际数据库一致。若使用上述容器，设置 `PG_PASSWORD=local-dev-password`。
 
-**首次启动会做两件初始化**（都幂等，已有的一律不动）：
+| 配置                       | 用途                                             |
+| -------------------------- | ------------------------------------------------ |
+| `PG_*`                     | 后端数据库连接                                   |
+| `ADMIN_EMAIL`、`ADMIN_PWD` | 首次初始化管理员的邮箱与密码                     |
+| `JWT_SECRET`               | 登录凭据签名密钥；生产环境必须配置               |
+| `CORS_ORIGINS`             | 允许访问后端的前端来源，多个来源用逗号分隔       |
+| `PORT`                     | 后端监听端口，默认 `3000`                        |
+| `ENABLE_DOCS`              | 是否开启接口文档，生产环境默认关闭               |
+| `VITE_API_URL`             | 前端请求的后端地址，默认 `http://localhost:3000` |
 
-- 若库里还没有 `name` 为 `admin` 的账号，用 `.env` 里的 `ADMIN_EMAIL` / `ADMIN_PWD` 建一个。
-  之后不再动它——改密码请直接改库，重启**不会**把它重置回去。
-- 建出图书管理的视图、32 个权限点，以及两个内置角色：**管理员**（全部视图与权限）与
-  **观察者**（只能读图书业务，看不到系统管理）。
+管理员初始密码由你配置，示例值仅用于本地开发。前端环境变量会进入浏览器构建产物，不应包含数据库密码或签名密钥。
 
-登录页在 `http://localhost:5173/login`。
-
-## 检查
+### 3. 迁移与启动
 
 ```bash
-bun run typecheck           # 两个包一起（跨包类型会被真的检查）
-bun run test                # 后端单测 + 前端单测，都不依赖数据库
-bun run build               # 构建前端
+bun run db:deploy
+bun run dev
 ```
 
-需要真实数据库的后端集成测试单独运行：
+| 入口           | 默认地址                          |
+| -------------- | --------------------------------- |
+| 管理端登录     | `http://localhost:5173/login`     |
+| 后端服务       | `http://localhost:3000`           |
+| 开发接口文档   | `http://localhost:3000/docs`      |
+| 进程健康检查   | `http://localhost:3000/health`    |
+| 数据库健康检查 | `http://localhost:3000/health/db` |
+
+也可分别运行 `bun run dev:backend` 和 `bun run dev:frontend`。用 `ADMIN_EMAIL` 和 `ADMIN_PWD` 登录管理端。
+
+后端在监听前同步完整权限目录，再初始化默认视图、角色和管理员；数据库不可用、权限定位冲突或初始化失败会阻止启动。首次提供 11 个视图、33 个示例权限，以及“管理员”和“观察者”两个角色。观察者只能读取图书业务；需要体验该角色时，在用户管理中创建用户并绑定观察者角色。
+
+初始化是幂等的：已有角色授权和管理员密码不会被重启覆盖。管理员通过持久标记识别，改名、撤权或软删除不会触发重建或恢复授权；新增权限需要在角色管理中显式授予。
+
+## 权限如何使用
+
+新业务接口默认生成 `请求方法:路由模板` 形式的权限标识，例如 `GET:/reports/:id`。请求方法不同即为不同权限；路径参数使用模板，不使用具体请求中的 ID。
+
+通常只需实现接口，再到管理端配置角色授权。接口确有特殊需要时，使用 `permissionOptions` 声明 `permission`：
+
+- `permission: "reports.export"`：使用固定权限标识。
+- `permission: false`：不生成或检查操作权限，仍要求登录并检查强制改密状态。
+
+**路由将来可能变动时，应在修改路由前显式固定原权限标识。** 托管系统通过 `code` 或 `url + method` 定位已有记录：其中一项保留时可更新并保留角色关联；两者均改变时会新建权限，旧记录标记废弃，原授权不会自动转移。
+
+权限同步只新增、更新或标记废弃，不自动删除记录，不修改角色授权。多个实例必须使用相同的完整路由目录；当前不支持不同路由版本同时同步同一张权限表。完整配置示例及变更规则见[权限说明](./docs/permissions.md)。
+
+## 账号与密码如何使用
+
+登录用户可通过顶栏“我的信息”查看当前姓名、邮箱、组织和角色，通过“修改密码”修改自己的密码，两个页面均不依赖系统管理权限。
+
+用户管理中的“重置密码”需要独立权限 `rbac.user.resetPassword`。用户使用重置后的临时密码登录时，必须先修改密码才能访问业务接口。普通用户资料编辑不接受密码字段。
+
+修改或重置密码后，该用户全部旧 JWT 失效，需要重新登录。退出登录只清除当前浏览器的会话。已有数据库升级时先执行迁移，升级后的旧 JWT 也需要重新登录；账号恢复和迁移细节见[密码管理](./docs/passwords.md)。
+
+## 基于模板开发新项目
+
+使用本仓库的明确提交或版本作为起点，同时保留前端、后端、工作区脚本、迁移和锁文件。完整导出步骤见[模板初始化指南](./frontend/docs/template-usage.md)。
+
+1. 修改根目录与两端的包名称，同步工作区依赖、脚本过滤条件和类型导入，重新安装依赖更新锁文件。
+2. 修改 `frontend/src/config/brand.ts` 中的公司名称、项目名称和品牌配置，并替换标志图片。
+3. 配置独立数据库与管理员凭据，应用迁移后启动项目。
+4. 按业务需要扩展或删除图书示例，保留模型、接口、页面和测试的一致性。
+5. 保留许可证与来源说明，维护自己的项目文档并完成检查。
+
+新增业务通常按“数据库模型 → 迁移 → 后端模块 → 前端请求适配与页面 → 视图及角色授权 → 测试”的顺序进行，详见[全栈扩展指南](./docs/extending.md)。
+
+内部数据、组件和回调必须有对应类型，优先从模型、校验模型和框架推导；非必要情况下禁止使用 `any`、`unknown`。确实未知的外部边界需要说明原因，并验证、收窄后再进入业务代码。完整要求见[前端类型约束](./frontend/docs/constraints.md#类型约束)与[后端类型约束](./backend/docs/constraints.md#类型约束)。
+
+## 开发检查与测试
 
 ```bash
-cd backend && PG_INTEGRATION=1 bun test tests/integration
+# 首次运行浏览器测试前安装浏览器。
+cd frontend
+bunx playwright install chromium
+cd ..
+
+bun run check        # 两端类型与单测，以及前端格式、代码检查、构建和浏览器测试
+bun run typecheck    # 两端类型检查
+bun run test         # 两端单元测试，不依赖数据库
+bun run build        # 构建前端
 ```
 
-前端另有一套浏览器测试（布局溢出、可访问性、导航），见
-[`frontend/README.md`](./frontend/README.md)。
+真实数据库集成测试与全栈浏览器测试需要独立测试库。先按[测试指南](./docs/testing.md)配置测试数据库环境变量并应用迁移，再执行：
 
-## 前后端怎么连
+```bash
+bun run test:integration
+bun run test:e2e
+```
 
-前端通过 Eden Treaty 直接消费后端的路由类型，没有 HTTP 客户端库，也没有第二份
-接口定义。约定与踩坑记录见
-[`frontend/docs/api-client.md`](./frontend/docs/api-client.md)。
+这两类测试会写入和清理数据库记录，不要连接日常开发库或生产库。全栈浏览器测试会自行启动后端与前端。
+
+## 构建与部署
+
+```bash
+# 使用实际后端地址构建前端。
+VITE_API_URL=https://api.example.com bun run build
+
+# 配置生产环境变量后，应用数据库迁移并启动后端。
+bun run db:deploy
+bun run --filter @ts-fullstack-ts-grm/backend start
+```
+
+前端产物位于 `frontend/dist/`，静态服务器需要为页面路由提供 `index.html` 回退。后端直接运行 TypeScript；生产环境设置 `NODE_ENV=production`、随机 `JWT_SECRET`、数据库连接和实际 `CORS_ORIGINS`。
+
+当前模板未提供登录限流、多租户隔离、完整审计日志和单独的会话撤销接口；生产应用按自身需求补充。配置、健康检查与初始化范围见[部署说明](./docs/deployment.md)。
+
+## 文档与开源使用
+
+| 文档                             | 内容                                   |
+| -------------------------------- | -------------------------------------- |
+| [项目文档](./docs/README.md)     | 跨前后端的扩展、权限、密码、测试与部署 |
+| [前端入口](./frontend/README.md) | 前端开发与界面规范                     |
+| [后端入口](./backend/README.md)  | 后端分层、模型、持久化与迁移           |
+| [贡献指南](./CONTRIBUTING.md)    | 开发和提交要求                         |
+| [安全报告](./SECURITY.md)        | 漏洞报告方式                           |
+
+项目源码采用 [Apache-2.0 许可证](./LICENSE)，来源与归属见 [NOTICE](./NOTICE)。第三方依赖遵循各自许可证。工作区包设置为私有包以防误发布到 npm，不影响使用源码创建自己的项目。
