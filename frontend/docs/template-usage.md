@@ -28,7 +28,7 @@ bun install --frozen-lockfile
 
 1. 同时修改根及两端 package.json 的名称，同步工作区依赖、脚本过滤条件和 api.ts 的类型导入；重新 bun install 更新锁文件。
 2. 修改 frontend/src/config/brand.ts，替换 public/images/ 中的 Logo，同步浏览器品牌断言。
-3. 按根 README 配置 PostgreSQL、迁移与管理员凭据；frontend/.env 中配置 VITE_API_URL。
+3. 按根 README 配置 PostgreSQL、开发库结构与管理员凭据；frontend/.env 中配置 VITE_API_URL。
 4. 默认业务为图书、作者、书店；按[扩展指南](../../docs/extending.md)增加或删除整个业务链路。
 5. 保留 LICENSE 与 NOTICE，更新 README 与项目来源说明。
 6. 安装 Chromium 后运行根 bun run check，再在独立数据库运行集成与真实全栈测试。

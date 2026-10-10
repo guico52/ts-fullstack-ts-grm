@@ -6,7 +6,7 @@
 
 安装 Bun 1.3.14 和 Node.js ≥24.11.0。在目标环境执行 bun install --frozen-lockfile。
 配置 PG_*、NODE_ENV=production、强随机 JWT_SECRET、CORS_ORIGINS、PORT。管理员初始化需要 ADMIN_EMAIL / ADMIN_PWD；持久初始化标记存在时不会覆盖凭据或恢复绑定。
-先以迁移账号运行 bun run db:deploy，再在 backend/ 内 bun run start。后端直接运行 TypeScript，不需要额外构建。
+模板不附带历史迁移。正式项目先在独立空库用 `bun run db:dev -n init` 生成并应用初始迁移，审查并提交后，在部署环境以迁移账号运行 bun run db:deploy，再在 backend/ 内 bun run start。后端直接运行 TypeScript，不需要额外构建。
 
 前端在构建时注入地址：
 
@@ -37,4 +37,4 @@ Swagger 默认在生产关闭；显式 ENABLE_DOCS=true 会开启，请控制其
 源码按 Apache-2.0 发布，保留根 LICENSE / NOTICE。上游导出记录见 frontend/docs/template-origin.md。
 第三方依赖保持各自许可证；发布前核查新增依赖与复制代码的归属要求。
 
-升级前执行 `bun run db:deploy`，本次迁移后旧 JWT 失效，用户需重新登录。本次迁移会为仍有用户更新权限的原有「管理员」角色补齐 `rbac.user.resetPassword`，其他角色需显式授予；不要通过重启恢复管理员权限。见[密码管理](./passwords.md)。
+已有项目使用自己的迁移历史升级数据库；模板不附带历史版本升级 SQL。不要通过重启恢复管理员权限，见[密码管理](./passwords.md)。

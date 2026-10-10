@@ -4,7 +4,7 @@
 
 ## 开发
 
-在根目录 bun install --frozen-lockfile，复制 backend/.env.example，使用独立开发库执行 bun run db:deploy，再 bun run dev。
+在根目录 bun install --frozen-lockfile，复制 backend/.env.example，首次使用独立空数据库执行 `bun run db:dev -n init`，审查并提交生成的 SQL；已有迁移时执行 `bun run db:deploy`，再 bun run dev。
 前端变更遵守 frontend/AGENTS.md 和 frontend/docs/constraints.md；后端遵守 backend/docs/constraints.md。
 不丢弃他人的未提交修改，不执行 git reset --hard、git clean -f、git restore 或 git stash。
 

@@ -2,7 +2,7 @@
  * 需要真实 PostgreSQL 的集成测试：覆盖 rbac 各模块及关联读写。
  *
  * 默认 `bun test` **不会**运行它：只有显式 `PG_INTEGRATION=1 bun test tests/integration`
- * 时才启用。运行前需先对目标库执行 `bun run db:deploy`（或 `db:dev`）。
+ * 时才启用。运行前需先生成项目初始迁移，再对独立空测试库执行 `bun run db:deploy`。
  *
  * 说明：`pool` 是全局单例，所以集成测试放在同一个文件里，只关一次池。
  */
@@ -166,26 +166,6 @@ describe.skipIf(!enabled)("rbac（真实 pg）", () => {
       name: "x",
     });
     expect(missing.status).toBe(404);
-  });
-
-  it("权限迁移保留标识、ID 和角色关联", async () => {
-    const session = await pool.connect();
-    try {
-      await session.query("BEGIN");
-      await session.query(`CREATE SCHEMA permission_upgrade_${STAMP}`);
-      await session.query(`SET LOCAL search_path TO permission_upgrade_${STAMP}`);
-      await session.query("CREATE TABLE sys_permission (id bigint PRIMARY KEY, name text NOT NULL)");
-      await session.query("CREATE TABLE sys_role_permission_mapping (role_id bigint, permission_id bigint REFERENCES sys_permission(id))");
-      await session.query("INSERT INTO sys_permission VALUES (42, 'book.book.read')");
-      await session.query("INSERT INTO sys_role_permission_mapping VALUES (7, 42)");
-      const sql = await Bun.file(new URL("../../migrations/20261011090000001_permission_metadata.sql", import.meta.url)).text();
-      await session.query(sql);
-      const result = await session.query("SELECT p.*, m.role_id FROM sys_permission p JOIN sys_role_permission_mapping m ON m.permission_id=p.id");
-      expect(result.rows[0]).toEqual({ id: "42", code: "book.book.read", url: null, method: null, deprecated: false, role_id: "7" });
-    } finally {
-      await session.query("ROLLBACK");
-      session.release();
-    }
   });
 
   it("权限 code 唯一，同一路由可以绑定不同 method", async () => {

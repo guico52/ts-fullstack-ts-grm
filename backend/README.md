@@ -29,17 +29,21 @@ bun run --filter @ts-fullstack-ts-grm/backend typecheck
 
 `backend/` 内可直接 `bun run dev` / `bun test` / `bun run typecheck`。
 
-数据库迁移（`backend/` 内）：
+首次开发在根目录对空数据库执行 `bun run db:dev -n init`，生成并应用初始 SQL，审查后纳入项目版本控制；再执行 `bun run dev` 同时启动前后端。只启动后端时执行 `bun run dev:backend`，使用文件监听自动重启。
+
+模板不附带历史迁移，`db:deploy` 不会在没有迁移文件时自动建表。已有迁移的新开发库、测试库和部署环境使用 `db:deploy` 应用项目迁移；后续模型变更使用 `db:dev -n <名称>` 保留新的 SQL 记录。
+
+数据库命令（`backend/` 内）：
 
 ```bash
 bun run db:dev -n init   # 生成并应用一个迁移
 bun run db:deploy        # 应用待应用迁移
 bun run db:status        # 查看迁移状态
 bun run db:check         # 模型与库是否一致
-bun run db:push          # 直接同步库结构（不写历史，仅本地）
+bun run db:push          # 临时结构实验（不记录 SQL，不用于项目初始化）
 ```
 
-需要迁移后的独立测试数据库及 ADMIN_EMAIL / ADMIN_PWD。测试自动初始化管理员与默认数据，不依赖运行中的服务；会写入及清理测试数据，禁止指向生产库。集成测试：
+需要已应用项目迁移的独立测试数据库及 ADMIN_EMAIL / ADMIN_PWD。测试自动初始化管理员与默认数据，不依赖运行中的服务；会写入及清理测试数据，禁止指向生产库。集成测试：
 
 ```bash
 bun run test:integration
@@ -81,7 +85,7 @@ src/
     book/book/               图书（所属书店 + 多对多作者）
     book/author/             作者
     book/store/              书店
-migrations/                迁移 SQL（纳入版本控制）
+migrations/                项目自行生成的迁移（模板不附带历史 SQL）
 ts-grm-migrate.config.ts   迁移配置（独立入口，自行加载 .env）
 tests/                     单测；tests/integration/ 需真实库
 ```
@@ -167,6 +171,6 @@ tests/                     单测；tests/integration/ 需真实库
 - 每次受保护请求检查数据库的 tokenVersion 与 JWT；改密、重置或软删除后旧 JWT 返回 401。
 - 错误当前密码返回 422 / INVALID_PASSWORD；待改密用户访问业务接口返回 403 / PASSWORD_CHANGE_REQUIRED。
 
-见[密码管理与迁移](../docs/passwords.md)。
+见[密码管理](../docs/passwords.md)。
 
 权限自动生成、托管同步与路由变更边界见[权限说明](../docs/permissions.md)。

@@ -18,7 +18,7 @@ bun run check
 `check` 执行 typecheck、Prettier 检查、ESLint、单测、生产构建和浏览器测试。
 单独执行 `bun run test` / `bun run build` / `bun run test:browser`。
 默认 preview 端口 4173；已有服务占用时用 `PLAYWRIGHT_PORT=4175 bun run check`，测试不会复用旧服务。
-真实全栈浏览器测试另用 `bun run test:e2e`，需要独立、已迁移的 PostgreSQL 测试库，见[测试说明](../docs/testing.md)。
+真实全栈浏览器测试另用 `bun run test:e2e`，需要独立、已应用项目迁移的 PostgreSQL 测试库，见[测试说明](../docs/testing.md)。
 
 ## 代码入口
 

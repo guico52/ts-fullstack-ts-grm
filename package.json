@@ -17,7 +17,9 @@
     "check": "bun run --filter @ts-fullstack-ts-grm/backend check && bun run --filter @ts-fullstack-ts-grm/frontend check",
     "test:integration": "bun run --filter @ts-fullstack-ts-grm/backend test:integration",
     "db:deploy": "bun run --filter @ts-fullstack-ts-grm/backend db:deploy",
-    "test:e2e": "bun run --filter @ts-fullstack-ts-grm/frontend test:e2e"
+    "test:e2e": "bun run --filter @ts-fullstack-ts-grm/frontend test:e2e",
+    "db:push": "bun run --filter @ts-fullstack-ts-grm/backend db:push",
+    "db:dev": "bun run --filter @ts-fullstack-ts-grm/backend db:dev"
   },
   "engines": {
     "bun": ">=1.2.0",
