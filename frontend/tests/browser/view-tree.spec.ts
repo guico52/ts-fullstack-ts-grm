@@ -132,6 +132,28 @@ test.describe("view tree", () => {
     await expect(dialog.getByLabel("排序")).toHaveValue("42")
   })
 
+  test("editing a node leaves its order alone", async ({ page }) => {
+    await gotoPage(page, "/system/views")
+
+    // 「组织」的 sort 是 1，同级最大也是 1。`auto` 若在编辑时跑，它会变成 2。
+    await page.getByRole("button", { name: "编辑 组织" }).click()
+    const dialog = page.getByRole("dialog")
+    await expect(dialog).toBeVisible()
+
+    // 打开弹窗、什么都没做 —— 顺序必须还是它自己那个值。
+    await expect(dialog.getByLabel("排序")).toHaveValue("1")
+
+    // 改上级也不重算 —— `auto` 是默认值，不是每次改动都重算的派生值。
+    await dialog.getByLabel("上级视图").click()
+    await page.locator("[data-slot=popover-content]").getByRole("button", { name: "系统" }).click()
+    await expect(dialog.getByLabel("排序")).toHaveValue("1")
+
+    // 清空也不会让 `auto` 复活 —— 戳过就是用户的意思，而“清空”就是一个意思。
+    // `sort` 本来也允许为空（后端在插入时取同级最大值 +1）。
+    await dialog.getByLabel("排序").fill("")
+    await expect(dialog.getByLabel("排序")).toHaveValue("")
+  })
+
   test("a menu offers 添加页面, a page offers 添加按钮, a button offers neither", async ({
     page,
   }) => {

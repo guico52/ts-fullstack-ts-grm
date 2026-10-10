@@ -119,6 +119,12 @@ const dialogSize = computed<DialogSize>(() => {
 /** Fields the user has typed into; their `auto` rule stops applying. */
 const touched = ref<Set<string>>(new Set())
 
+/** 一个值算不算“已经填了”。空字符串、null、空数组都算没填。 */
+function isFilled(value: unknown): boolean {
+  if (value === "" || value === null || value === undefined) return false
+  return !Array.isArray(value) || value.length > 0
+}
+
 function blankValues(spec: ResourceSpec): Record<string, unknown> {
   const draft: Record<string, unknown> = {}
   for (const field of spec.fields) {
@@ -135,14 +141,25 @@ watch(
   () => props.open,
   (open) => {
     if (!open) return
-    values.value =
-      props.record === null
-        ? { ...blankValues(props.spec), ...(props.seed ?? {}) }
-        : props.spec.toForm(props.record)
+    const editing = props.record !== null
+    values.value = editing
+      ? props.spec.toForm(props.record!)
+      : { ...blankValues(props.spec), ...(props.seed ?? {}) }
     errors.value = {}
     submitError.value = null
     submitted.value = false
-    touched.value = new Set()
+
+    // 编辑时，已经填着的那份值就是用户的意图，不能被 `auto` 再算一遍。
+    //
+    // 不这么做的话，视图的 `sort` 会在弹窗打开的瞬间从“这条记录现在的排序”
+    // 变成“同级最大值 +1” —— 什么都没干，顺序就变了。`auto` 是**默认值**：
+    // 它管的是“这个字段还没有值”，而不是“每次改动都重算”。
+    touched.value = editing
+      ? new Set(
+          props.spec.fields.filter((field) => isFilled(values.value[field.key])).map((f) => f.key),
+        )
+      : new Set()
+
     applyAuto()
   },
 )
@@ -158,6 +175,11 @@ watch(
 
 /**
  * Fill in every `auto` field that the user has not typed into.
+ *
+ * **`auto` 只负责“还没人给这个字段一个值”的那种情况** —— 新建时把默认值填上，
+ * 编辑时则因为原值已在而整个不跑。它也不会因为字段被清空而重新接管：一旦
+ * 碰过就是用户的意思，而“清空”本身就是一个意思。要一个真的会随其他字段重算的
+ * 值，那是派生值，应该由后端算（比如视图的 `sort` 在插入时取同级最大值 +1）。
  *
  * Converges: the rule is a pure function of the current values, so writing
  * its result changes nothing on the next pass and the watch settles.
